@@ -256,7 +256,7 @@ class TaxiViewModel : ViewModel() {
                         ?.replace(Regex("[^0-9.]"), "")?.toDoubleOrNull(),
                 )
 
-                val response = RetrofitClient.api.createTrip(request)
+                val response = RetrofitClient.apiService.createTrip(request)
                 if (response.isSuccessful && response.body()?.success == true) {
                     val data = response.body()!!.data
                     _tripState.value = TripState.Success(

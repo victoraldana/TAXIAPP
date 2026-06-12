@@ -40,6 +40,10 @@ import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.libraries.places.api.Places
 import com.google.maps.android.compose.*
+import android.widget.Toast
+import com.example.taxi.ui.AssignedDriverInfo
+import com.example.taxi.ui.DriverAssignedScreen
+import com.example.taxi.viewmodel.TripState
 
 // ─── Paleta ──────────────────────────────────────────────────────────────────
 private val MapDark      = Color(0xFF0F1923)
@@ -53,11 +57,6 @@ private val MapYellowDk  = Color(0xFFE6A800)
 private val MapGreen     = Color(0xFF4CAF50)
 private val MapRed       = Color(0xFFEF5350)
 private val MapBlue      = Color(0xFF4FC3F7)
-
-import android.widget.Toast
-import com.example.taxi.ui.AssignedDriverInfo
-import com.example.taxi.ui.DriverAssignedScreen
-import com.example.taxi.viewmodel.TripState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
