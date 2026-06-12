@@ -63,4 +63,9 @@ interface ApiService {
     suspend fun createTrip(
         @Body request: CreateTripRequest
     ): Response<CreateTripResponse>
+
+    @GET("api/admin/drivers/{id}/location")
+    suspend fun getDriverLocation(
+        @retrofit2.http.Path("id") id: String
+    ): Response<com.example.taxi.model.DriverLocationResponse>
 }

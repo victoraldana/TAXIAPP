@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.Call
@@ -57,6 +59,11 @@ class TaxiViewModel : ViewModel() {
 
     private val _tripState = MutableStateFlow<TripState>(TripState.Idle)
     val tripState: StateFlow<TripState> = _tripState.asStateFlow()
+
+    private val _driverLocation = MutableStateFlow<LatLng?>(null)
+    val driverLocation: StateFlow<LatLng?> = _driverLocation.asStateFlow()
+    
+    private var locationPollingJob: Job? = null
 
     private var placesClient: PlacesClient? = null
     private var sessionToken: AutocompleteSessionToken? = null
@@ -263,6 +270,11 @@ class TaxiViewModel : ViewModel() {
                         driver = data?.driver,
                         tripId = data?.tripId ?: ""
                     )
+                    
+                    // Start polling driver location
+                    data?.driver?.id?.let { dId ->
+                        startPollingLocation(dId)
+                    }
                 } else {
                     val msg = response.body()?.message ?: "Error al confirmar el viaje"
                     _tripState.value = TripState.Error(msg)
@@ -274,7 +286,30 @@ class TaxiViewModel : ViewModel() {
         }
     }
 
+    private fun startPollingLocation(driverId: String) {
+        locationPollingJob?.cancel()
+        locationPollingJob = viewModelScope.launch {
+            while(true) {
+                try {
+                    val res = RetrofitClient.apiService.getDriverLocation(driverId)
+                    if (res.isSuccessful) {
+                        val loc = res.body()?.data
+                        if (loc != null && loc.lat != 0.0 && loc.lng != 0.0) {
+                            _driverLocation.value = LatLng(loc.lat, loc.lng)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("TaxiViewModel", "Error polling location: ${e.message}")
+                }
+                delay(3000)
+            }
+        }
+    }
+
     fun resetTrip() {
+        locationPollingJob?.cancel()
+        locationPollingJob = null
+        _driverLocation.value = null
         _tripState.value = TripState.Idle
         _uiState.value = TaxiUiState()
     }

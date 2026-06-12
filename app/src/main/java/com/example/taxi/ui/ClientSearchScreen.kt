@@ -65,43 +65,21 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String) {
     val uiState by viewModel.uiState.collectAsState()
     val tripState by viewModel.tripState.collectAsState()
 
-    // ── Si el viaje fue asignado, mostramos la pantalla 3D ────────────────────
-    when (val state = tripState) {
-        is TripState.Success -> {
-            val d = state.driver
-            if (d != null) {
-                DriverAssignedScreen(
-                    driver = AssignedDriverInfo(
-                        driverId = d.id,
-                        fullName = d.fullName,
-                        phone = d.phone,
-                        avatarUrl = d.avatarUrl,
-                        unitNumber = d.unitNumber,
-                        vehicleMake = d.vehicleMake ?: "",
-                        vehicleModel = d.vehicleModel ?: "",
-                        vehicleYear = d.vehicleYear,
-                        vehiclePlate = d.vehiclePlate,
-                        vehicleColor = d.vehicleColor ?: "gris",
-                        vehicleType = d.vehicleType ?: "sedan",
-                        rating = d.rating,
-                        totalTrips = d.totalTrips
-                    ),
-                    originAddress = uiState.pickupPoint?.address ?: "",
-                    destAddress = uiState.destinationPoint?.address ?: "",
-                    onCancel = { viewModel.resetTrip() },
-                    onContact = { /* TODO: Intent para llamada */ }
-                )
-                return
-            } else {
-                Toast.makeText(LocalContext.current, "Buscando conductor...", Toast.LENGTH_SHORT).show()
-                viewModel.resetTrip() // Si no hay en cola, lo reseteamos para esta demo
+    // ── Si el viaje fue asignado y no hay conductor, reseteamos la demo ─────────
+    LaunchedEffect(tripState) {
+        when (val state = tripState) {
+            is TripState.Success -> {
+                if (state.driver == null) {
+                    Toast.makeText(context, "Buscando conductor...", Toast.LENGTH_SHORT).show()
+                    viewModel.resetTrip()
+                }
             }
+            is TripState.Error -> {
+                Toast.makeText(context, state.message, Toast.LENGTH_LONG).show()
+                viewModel.resetTrip()
+            }
+            else -> {}
         }
-        is TripState.Error -> {
-            Toast.makeText(LocalContext.current, state.message, Toast.LENGTH_LONG).show()
-            viewModel.resetTrip()
-        }
-        else -> {}
     }
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
@@ -164,10 +142,11 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String) {
     val hasRoute = uiState.routePoints.isNotEmpty()
     val hasDestination = uiState.destinationPoint != null
     val hasPickup = uiState.pickupPoint != null
+    val isTripActive = tripState is TripState.Success && (tripState as TripState.Success).driver != null
 
     BottomSheetScaffold(
         scaffoldState = sheetState,
-        sheetPeekHeight = if (hasRoute) 260.dp else 200.dp,
+        sheetPeekHeight = if (isTripActive) 450.dp else if (hasRoute) 260.dp else 200.dp,
         sheetDragHandle = {
             Box(
                 modifier = Modifier
@@ -211,7 +190,8 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String) {
                 },
                 onConfirm = { 
                     if (hasRoute) viewModel.confirmTrip(clientId)
-                }
+                },
+                onCancelTrip = { viewModel.resetTrip() }
             )
         }
     ) { innerPadding ->
@@ -266,6 +246,22 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String) {
                         width = 22f,
                         geodesic = true
                     )
+                }
+
+                // ── Marcador del taxi en tiempo real ──
+                val drvLoc by viewModel.driverLocation.collectAsState()
+                drvLoc?.let { loc ->
+                    Marker(
+                        state = MarkerState(loc),
+                        title = "Tu Taxi",
+                        icon = com.google.android.gms.maps.model.BitmapDescriptorFactory.defaultMarker(
+                            com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_YELLOW
+                        )
+                    )
+                    // Update camera to follow taxi slightly
+                    LaunchedEffect(loc) {
+                        cameraPositionState.animate(CameraUpdateFactory.newLatLng(loc), 500)
+                    }
                 }
             }
 
@@ -375,10 +371,40 @@ private fun BottomSheetContent(
     onPickupPredictionSelect: (PlacePrediction) -> Unit,
     onDestinationPredictionSelect: (PlacePrediction) -> Unit,
     onUseMyLocation: () -> Unit,
-    onConfirm: () -> Unit
+    onConfirm: () -> Unit,
+    onCancelTrip: () -> Unit
 ) {
-    val hasRoute  = uiState.routePoints.isNotEmpty()
+    if (tripState is TripState.Success) {
+        val d = tripState.driver
+        if (d != null) {
+            DriverAssignedScreen(
+                driver = AssignedDriverInfo(
+                    driverId = d.id,
+                    fullName = d.fullName,
+                    phone = d.phone,
+                    avatarUrl = d.avatarUrl,
+                    unitNumber = d.unitNumber,
+                    vehicleMake = d.vehicleMake ?: "",
+                    vehicleModel = d.vehicleModel ?: "",
+                    vehicleYear = d.vehicleYear,
+                    vehiclePlate = d.vehiclePlate,
+                    vehicleColor = d.vehicleColor ?: "gris",
+                    vehicleType = d.vehicleType ?: "sedan",
+                    rating = d.rating,
+                    totalTrips = d.totalTrips
+                ),
+                originAddress = uiState.pickupPoint?.address ?: "",
+                destAddress = uiState.destinationPoint?.address ?: "",
+                onCancel = onCancelTrip,
+                onContact = { /* TODO: Llamar */ },
+                isBottomSheet = true
+            )
+            return
+        }
+    }
+
     val canSearch = uiState.pickupPoint != null && uiState.destinationPoint != null
+    val hasRoute = uiState.routePoints.isNotEmpty()
 
     Column(
         modifier = Modifier

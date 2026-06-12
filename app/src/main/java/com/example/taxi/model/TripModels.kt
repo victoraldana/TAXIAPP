@@ -43,3 +43,13 @@ data class DriverData(
     val rating: Float = 5.0f,
     @SerializedName("total_trips")    val totalTrips: Int = 0,
 )
+
+data class DriverLocationResponse(
+    val success: Boolean,
+    val data: LocationData? = null
+)
+
+data class LocationData(
+    val lat: Double,
+    val lng: Double
+)

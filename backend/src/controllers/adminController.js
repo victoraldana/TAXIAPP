@@ -296,6 +296,30 @@ export const listTrips = async (_req, res) => {
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
+// CONDUCTOR — obtener ubicación (para tracking en tiempo real)
+// ──────────────────────────────────────────────────────────────────────────────
+export const getDriverLocation = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await query(
+      'SELECT current_lat, current_lng FROM driver_profiles WHERE user_id=$1',
+      [id]
+    );
+    if (result.rows.length === 0)
+      return res.status(404).json({ success: false, message: 'Conductor no encontrado' });
+    
+    const { current_lat, current_lng } = result.rows[0];
+    res.json({
+      success: true,
+      data: { lat: parseFloat(current_lat) || 0, lng: parseFloat(current_lng) || 0 }
+    });
+  } catch (err) {
+    console.error('getDriverLocation:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
 // VIAJES — asignar conductor (próximo en cola)
 // ──────────────────────────────────────────────────────────────────────────────
 export const assignNextDriver = async (req, res) => {

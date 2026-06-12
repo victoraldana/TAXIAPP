@@ -54,7 +54,8 @@ fun DriverAssignedScreen(
     originAddress: String,
     destAddress: String,
     onCancel: () -> Unit,
-    onContact: () -> Unit
+    onContact: () -> Unit,
+    isBottomSheet: Boolean = false
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulse by infiniteTransition.animateFloat(
@@ -70,16 +71,15 @@ fun DriverAssignedScreen(
 
     Box(
         modifier = Modifier
-            .fillMaxSize()
-            .background(AssignDark)
-            .drawBehind { drawAssignBg(rotation) }
+            .then(if (isBottomSheet) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
+            .background(if (isBottomSheet) Color.Transparent else AssignDark)
+            .drawBehind { if (!isBottomSheet) drawAssignBg(rotation) }
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .then(if (isBottomSheet) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
                 .verticalScroll(rememberScrollState())
-                .statusBarsPadding()
-                .navigationBarsPadding()
+                .then(if (!isBottomSheet) Modifier.statusBarsPadding().navigationBarsPadding() else Modifier)
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {

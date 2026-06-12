@@ -1,6 +1,6 @@
 import express from 'express';
 import {
-  getDashboard, listDrivers, registerDriver, updateDriver,
+  getDashboard, listDrivers, registerDriver, updateDriver, getDriverLocation,
   getQueue, addToQueue, removeFromQueue, moveInQueue,
   listTrips, assignNextDriver, createTrip,
 } from '../controllers/adminController.js';
@@ -11,9 +11,10 @@ const router = express.Router();
 router.get('/dashboard', getDashboard);
 
 // Conductores
-router.get('/drivers',         listDrivers);
-router.post('/drivers',        registerDriver);
-router.patch('/drivers/:id',   updateDriver);
+router.get('/drivers',               listDrivers);
+router.post('/drivers',              registerDriver);
+router.patch('/drivers/:id',         updateDriver);
+router.get('/drivers/:id/location',  getDriverLocation);
 
 // Cola de turnos
 router.get('/queue',                       getQueue);
