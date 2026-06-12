@@ -29,12 +29,13 @@ let migrationError  = null;
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc:  ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      styleSrc:   ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
-      fontSrc:    ["'self'", "https://fonts.gstatic.com"],
-      connectSrc: ["'self'", "https://taxiapp-production-1a53.up.railway.app"],
-      imgSrc:     ["'self'", "data:", "https:"],
+      defaultSrc:    ["'self'"],
+      scriptSrc:     ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      scriptSrcAttr: ["'unsafe-inline'"],   // permite onclick= en HTML
+      styleSrc:      ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
+      fontSrc:       ["'self'", "https://fonts.gstatic.com"],
+      connectSrc:    ["'self'", "https://taxiapp-production-1a53.up.railway.app"],
+      imgSrc:        ["'self'", "data:", "https:"],
     },
   },
 }));

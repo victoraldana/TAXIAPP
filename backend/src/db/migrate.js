@@ -193,6 +193,20 @@ CREATE TRIGGER trg_client_profiles_updated_at
     BEFORE UPDATE ON client_profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER trg_trips_updated_at
     BEFORE UPDATE ON trips FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Agregar columnas nuevas a tablas existentes (idempotente)
+ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS unit_number VARCHAR(20);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_driver_unit ON driver_profiles(unit_number) WHERE unit_number IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS driver_queue (
+    id             UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+    driver_id      UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    queue_position INTEGER     NOT NULL DEFAULT 0,
+    is_active      BOOLEAN     DEFAULT TRUE,
+    added_at       TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_queue_active ON driver_queue(is_active, queue_position);
+CREATE INDEX IF NOT EXISTS idx_queue_driver ON driver_queue(driver_id);
 `;
 
 // ============================================================
