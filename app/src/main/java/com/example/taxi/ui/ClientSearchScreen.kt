@@ -81,9 +81,23 @@ fun ClientSearchScreen(
             fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                 location?.let {
                     val userLatLng = LatLng(it.latitude, it.longitude)
+                    viewModel.setCurrentLocationForBias(userLatLng) // Pass to ViewModel
                     cameraPositionState.move(CameraUpdateFactory.newLatLngZoom(userLatLng, 15f))
                 }
             }
+        }
+    }
+
+    // Auto-adjust camera to fit the route
+    LaunchedEffect(uiState.routePoints) {
+        if (uiState.routePoints.isNotEmpty()) {
+            val boundsBuilder = com.google.android.gms.maps.model.LatLngBounds.builder()
+            uiState.routePoints.forEach { boundsBuilder.include(it) }
+            val bounds = boundsBuilder.build()
+            cameraPositionState.animate(
+                CameraUpdateFactory.newLatLngBounds(bounds, 100),
+                durationMs = 1000
+            )
         }
     }
 
@@ -93,6 +107,7 @@ fun ClientSearchScreen(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
             properties = MapProperties(isMyLocationEnabled = locationPermissionGranted),
+            onMapClick = { viewModel.onMapClick(it) },
             uiSettings = MapUiSettings(
                 zoomControlsEnabled = false,
                 myLocationButtonEnabled = true
@@ -150,26 +165,42 @@ fun ClientSearchScreen(
                                 if (locationPermissionGranted) {
                                     fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                                         location?.let {
-                                            viewModel.setPickupPoint(LocationPoint(it.latitude, it.longitude, "Mi ubicación"))
+                                            viewModel.
+
+                                            setPickupPoint(LocationPoint(it.latitude, it.longitude, "Mi ubicación"))
                                         }
                                     }
+                                } else {
+                                    launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                                 }
                             }) {
-                                Icon(Icons.Default.MyLocation, contentDescription = "Geolocalizar", tint = Color.Gray)
+                                Icon(Icons.Default.MyLocation, contentDescription = "Geolocalizar", tint = Color.Blue)
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White
+                        )
                     )
 
                     if (uiState.pickupPredictions.isNotEmpty()) {
-                        LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) {
-                            items(uiState.pickupPredictions) { prediction ->
-                                ListItem(
-                                    headlineContent = { Text(prediction.primaryText) },
-                                    supportingContent = { Text(prediction.secondaryText) },
-                                    modifier = Modifier.clickable { viewModel.selectPrediction(prediction, isPickup = true) }
-                                )
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 200.dp),
+                            tonalElevation = 4.dp,
+                            shadowElevation = 4.dp
+                        ) {
+                            LazyColumn {
+                                items(uiState.pickupPredictions) { prediction ->
+                                    ListItem(
+                                        headlineContent = { Text(prediction.primaryText) },
+                                        supportingContent = { Text(prediction.secondaryText) },
+                                        modifier = Modifier.clickable { viewModel.selectPrediction(prediction, isPickup = true) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -180,28 +211,52 @@ fun ClientSearchScreen(
                     OutlinedTextField(
                         value = uiState.destinationSearchQuery,
                         onValueChange = { viewModel.updateDestinationQuery(it) },
-                        label = { Text("Destino") },
+                        label = { Text("¿A dónde vas?") },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Red) },
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White
+                        )
                     )
 
                     if (uiState.destinationPredictions.isNotEmpty()) {
-                        LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) {
-                            items(uiState.destinationPredictions) { prediction ->
-                                ListItem(
-                                    headlineContent = { Text(prediction.primaryText) },
-                                    supportingContent = { Text(prediction.secondaryText) },
-                                    modifier = Modifier.clickable { viewModel.selectPrediction(prediction, isPickup = false) }
-                                )
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 200.dp),
+                            tonalElevation = 4.dp,
+                            shadowElevation = 4.dp
+                        ) {
+                            LazyColumn {
+                                items(uiState.destinationPredictions) { prediction ->
+                                    ListItem(
+                                        headlineContent = { Text(prediction.primaryText) },
+                                        supportingContent = { Text(prediction.secondaryText) },
+                                        modifier = Modifier.clickable { viewModel.selectPrediction(prediction, isPickup = false) }
+                                    )
+                                }
                             }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    if (uiState.travelDistance != null) {
+                        Text(
+                            text = "Distancia: ${uiState.travelDistance}",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.DarkGray,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+
                     Button(
-                        onClick = { /* Confirm ride logic */ },
+                        onClick = { 
+                            // Aquí podrías navegar a una pantalla de seguimiento o mostrar un mensaje
+                            println("Viaje confirmado: ${uiState.travelDistance}")
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = uiState.pickupPoint != null && uiState.destinationPoint != null
                     ) {

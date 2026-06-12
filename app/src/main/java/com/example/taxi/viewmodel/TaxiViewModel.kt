@@ -1,18 +1,30 @@
 package com.example.taxi.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import com.example.taxi.model.LocationPoint
 import com.example.taxi.model.PlacePrediction
 import com.example.taxi.model.UserRole
 import com.example.taxi.model.toPlacePrediction
+import com.example.taxi.model.DirectionsService
+import com.example.taxi.model.decodePolyline
+import com.example.taxi.BuildConfig
 import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRequest
 import com.google.android.libraries.places.api.net.FetchPlaceRequest
 import com.google.android.libraries.places.api.net.PlacesClient
 import com.google.android.libraries.places.api.model.Place
+import com.google.android.libraries.places.api.model.AutocompleteSessionToken
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+
+import com.google.android.libraries.places.api.model.RectangularBounds
 
 data class TaxiUiState(
     val selectedRole: UserRole? = null,
@@ -23,6 +35,7 @@ data class TaxiUiState(
     val pickupPredictions: List<PlacePrediction> = emptyList(),
     val destinationPredictions: List<PlacePrediction> = emptyList(),
     val routePoints: List<LatLng> = emptyList(),
+    val travelDistance: String? = null,
     val isSearching: Boolean = false
 )
 
@@ -31,9 +44,33 @@ class TaxiViewModel : ViewModel() {
     val uiState: StateFlow<TaxiUiState> = _uiState.asStateFlow()
 
     private var placesClient: PlacesClient? = null
+    private var sessionToken: AutocompleteSessionToken? = null
+    private val apiKey = BuildConfig.MAPS_API_KEY
+    
+    // Store current location for search bias
+    private var currentLocation: LatLng? = null
+
+    fun setCurrentLocationForBias(latLng: LatLng) {
+        currentLocation = latLng
+    }
+
+    private val directionsService = Retrofit.Builder()
+        .baseUrl("https://maps.googleapis.com/")
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+        .create(DirectionsService::class.java)
 
     fun setPlacesClient(client: PlacesClient) {
         placesClient = client
+        sessionToken = AutocompleteSessionToken.newInstance()
+    }
+
+    fun onMapClick(latLng: LatLng) {
+        if (_uiState.value.pickupPoint == null) {
+            setPickupPoint(LocationPoint(latLng.latitude, latLng.longitude, "Punto en el mapa"))
+        } else {
+            setDestinationPoint(LocationPoint(latLng.latitude, latLng.longitude, "Destino en el mapa"))
+        }
     }
 
     fun selectRole(role: UserRole) {
@@ -59,18 +96,35 @@ class TaxiViewModel : ViewModel() {
     }
 
     private fun getPredictions(query: String, isPickup: Boolean) {
-        val request = FindAutocompletePredictionsRequest.builder()
+        val requestBuilder = FindAutocompletePredictionsRequest.builder()
+            .setSessionToken(sessionToken)
             .setQuery(query)
-            .build()
 
-        placesClient?.findAutocompletePredictions(request)?.addOnSuccessListener { response ->
-            val predictions = response.autocompletePredictions.map { it.toPlacePrediction() }
-            if (isPickup) {
-                _uiState.value = _uiState.value.copy(pickupPredictions = predictions)
-            } else {
-                _uiState.value = _uiState.value.copy(destinationPredictions = predictions)
-            }
+        // Add location bias if we have the current location
+        currentLocation?.let { loc ->
+            // Create a roughly 50km boundary around the user
+            val offset = 0.5 // roughly 50km
+            val bounds = RectangularBounds.newInstance(
+                LatLng(loc.latitude - offset, loc.longitude - offset),
+                LatLng(loc.latitude + offset, loc.longitude + offset)
+            )
+            requestBuilder.setLocationBias(bounds)
         }
+
+        val request = requestBuilder.build()
+
+        placesClient?.findAutocompletePredictions(request)
+            ?.addOnSuccessListener { response ->
+                val predictions = response.autocompletePredictions.map { it.toPlacePrediction() }
+                if (isPickup) {
+                    _uiState.value = _uiState.value.copy(pickupPredictions = predictions)
+                } else {
+                    _uiState.value = _uiState.value.copy(destinationPredictions = predictions)
+                }
+            }
+            ?.addOnFailureListener { exception ->
+                Log.e("TaxiViewModel", "Places API Error: ${exception.message}", exception)
+            }
     }
 
     fun selectPrediction(prediction: PlacePrediction, isPickup: Boolean) {
@@ -114,12 +168,55 @@ class TaxiViewModel : ViewModel() {
         val pickup = uiState.pickupPoint
         val dest = uiState.destinationPoint
         
+        Log.d("TaxiViewModel", "calculateRoute called: pickup=$pickup, dest=$dest")
+        Log.d("TaxiViewModel", "Using API Key: ${if (apiKey.isNotEmpty()) "Present (starts with ${apiKey.take(5)}...)" else "EMPTY"}")
+
         if (pickup != null && dest != null) {
-            val points = listOf(
-                LatLng(pickup.latitude, pickup.longitude),
-                LatLng(dest.latitude, dest.longitude)
-            )
-            _uiState.value = _uiState.value.copy(routePoints = points)
+            val origin = "${pickup.latitude},${pickup.longitude}"
+            val destination = "${dest.latitude},${dest.longitude}"
+
+            Log.d("TaxiViewModel", "Fetching directions from $origin to $destination")
+
+            directionsService.getDirections(origin, destination, apiKey)
+                .enqueue(object : Callback<com.example.taxi.model.DirectionsResponse> {
+                    override fun onResponse(
+                        call: Call<com.example.taxi.model.DirectionsResponse>,
+                        response: Response<com.example.taxi.model.DirectionsResponse>
+                    ) {
+                        if (response.isSuccessful) {
+                            val body = response.body()
+                            Log.d("TaxiViewModel", "Directions API Status: ${body?.status}")
+                            if (body?.status == "OK") {
+                                val route = body.routes?.firstOrNull()
+                                val points = route?.overview_polyline?.points
+                                val distance = route?.legs?.firstOrNull()?.distance?.text
+                                
+                                Log.d("TaxiViewModel", "Route points found: ${points != null}, Distance: $distance")
+
+                                if (points != null) {
+                                    val decodedPoints = decodePolyline(points)
+                                    _uiState.value = _uiState.value.copy(
+                                        routePoints = decodedPoints,
+                                        travelDistance = distance
+                                    )
+                                }
+                            } else {
+                                Log.e("TaxiViewModel", "Directions API Error: ${body?.status} - ${body?.error_message}")
+                                _uiState.value = _uiState.value.copy(travelDistance = "Error: ${body?.status}")
+                            }
+                        } else {
+                            Log.e("TaxiViewModel", "Directions API HTTP Error: ${response.code()} - ${response.message()}")
+                            _uiState.value = _uiState.value.copy(travelDistance = "Error HTTP: ${response.code()}")
+                        }
+                    }
+
+                    override fun onFailure(call: Call<com.example.taxi.model.DirectionsResponse>, t: Throwable) {
+                        Log.e("TaxiViewModel", "Directions API Network Error: ${t.message}", t)
+                        _uiState.value = _uiState.value.copy(travelDistance = "Error de red")
+                    }
+                })
+        } else {
+            Log.d("TaxiViewModel", "Cannot calculate route: missing pickup or destination")
         }
     }
 }
