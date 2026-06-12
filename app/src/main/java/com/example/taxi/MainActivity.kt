@@ -5,6 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -13,6 +15,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.taxi.model.UserRole
 import com.example.taxi.ui.ClientSearchScreen
 import com.example.taxi.ui.DriverHomeScreen
+import com.example.taxi.ui.HomeScreen
 import com.example.taxi.ui.LoginScreen
 import com.example.taxi.ui.RegisterScreen
 import com.example.taxi.ui.theme.TAXITheme
@@ -40,17 +43,17 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun TaxiNavGraph() {
     val navController: NavHostController = rememberNavController()
-    val taxiViewModel: TaxiViewModel = viewModel()
-    val authViewModel: AuthViewModel = viewModel()
+    val taxiViewModel: TaxiViewModel     = viewModel()
+    val authViewModel: AuthViewModel     = viewModel()
 
     NavHost(navController = navController, startDestination = "login") {
 
-        // ── Login por teléfono ────────────────────────────────────────────────
+        // ── Login ─────────────────────────────────────────────────────────────
         composable("login") {
             LoginScreen(
                 viewModel = authViewModel,
                 onLoginSuccess = { role ->
-                    val dest = if (role == "driver") "driver_home" else "client_search"
+                    val dest = if (role == "driver") "driver_home" else "home"
                     navController.navigate(dest) {
                         popUpTo("login") { inclusive = true }
                     }
@@ -63,27 +66,38 @@ fun TaxiNavGraph() {
 
         // ── Registro multi-paso ───────────────────────────────────────────────
         composable("register") {
-            // Por defecto CLIENT; el usuario podrá cambiar su rol en el futuro
             RegisterScreen(
                 viewModel = authViewModel,
                 selectedRole = UserRole.CLIENT,
                 onRegistrationComplete = {
-                    navController.navigate("client_search") {
+                    navController.navigate("home") {
                         popUpTo("login") { inclusive = true }
                     }
                 },
-                onBack = {
-                    navController.popBackStack()
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // ── Home del cliente ───────────────────────────────────────────────────
+        composable("home") {
+            val loggedUser by authViewModel.loggedUser.collectAsState()
+            HomeScreen(
+                userName = loggedUser?.fullName ?: loggedUser?.phone ?: "Usuario",
+                onServiceSelected = { serviceId ->
+                    when (serviceId) {
+                        "trip" -> navController.navigate("client_search")
+                        else   -> { /* Próximamente */ }
+                    }
                 }
             )
         }
 
-        // ── Pantalla del Cliente ──────────────────────────────────────────────
+        // ── Mapa de viaje ─────────────────────────────────────────────────────
         composable("client_search") {
             ClientSearchScreen(viewModel = taxiViewModel)
         }
 
-        // ── Pantalla del Conductor ────────────────────────────────────────────
+        // ── Pantalla del conductor ─────────────────────────────────────────────
         composable("driver_home") {
             DriverHomeScreen()
         }

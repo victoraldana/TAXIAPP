@@ -5,263 +5,609 @@ import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.*
+import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import com.example.taxi.model.LocationPoint
+import com.example.taxi.model.PlacePrediction
+import com.example.taxi.viewmodel.TaxiUiState
 import com.example.taxi.viewmodel.TaxiViewModel
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.libraries.places.api.Places
 import com.google.maps.android.compose.*
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.filled.MyLocation
-import com.google.android.gms.maps.model.PolylineOptions
-import com.google.android.libraries.places.api.Places
+// ─── Paleta ──────────────────────────────────────────────────────────────────
+private val MapDark      = Color(0xFF0F1923)
+private val MapCard      = Color(0xFF1A2535)
+private val MapCardLight = Color(0xFF1E2D40)
+private val MapBorder    = Color(0xFF253348)
+private val MapText      = Color(0xFFF0F6FF)
+private val MapSubText   = Color(0xFF7A90B0)
+private val MapYellow    = Color(0xFFFFC107)
+private val MapYellowDk  = Color(0xFFE6A800)
+private val MapGreen     = Color(0xFF4CAF50)
+private val MapRed       = Color(0xFFEF5350)
+private val MapBlue      = Color(0xFF4FC3F7)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
 @Composable
-fun ClientSearchScreen(
-    viewModel: TaxiViewModel
-) {
+fun ClientSearchScreen(viewModel: TaxiViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
-    
-    // Initialize places client in viewModel
+
+    // Inicializar Places
     LaunchedEffect(Unit) {
-        val placesClient = Places.createClient(context)
-        viewModel.setPlacesClient(placesClient)
+        viewModel.setPlacesClient(Places.createClient(context))
     }
 
-    // Initial camera position
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(LatLng(0.0, 0.0), 15f)
     }
 
-    var locationPermissionGranted by remember {
+    var locationGranted by remember {
         mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED
         )
     }
 
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-        onResult = { isGranted ->
-            locationPermissionGranted = isGranted
-        }
-    )
+    val permLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { locationGranted = it }
 
     LaunchedEffect(Unit) {
-        if (!locationPermissionGranted) {
-            launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
+        if (!locationGranted) permLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
     }
 
-    // Move camera to current location when permission is granted or at start
-    LaunchedEffect(locationPermissionGranted) {
-        if (locationPermissionGranted) {
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                location?.let {
-                    val userLatLng = LatLng(it.latitude, it.longitude)
-                    viewModel.setCurrentLocationForBias(userLatLng) // Pass to ViewModel
-                    cameraPositionState.move(CameraUpdateFactory.newLatLngZoom(userLatLng, 15f))
+    LaunchedEffect(locationGranted) {
+        if (locationGranted) {
+            fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
+                loc?.let {
+                    val ll = LatLng(it.latitude, it.longitude)
+                    viewModel.setCurrentLocationForBias(ll)
+                    cameraPositionState.move(CameraUpdateFactory.newLatLngZoom(ll, 16f))
                 }
             }
         }
     }
 
-    // Auto-adjust camera to fit the route
+    // Ajustar cámara a la ruta
     LaunchedEffect(uiState.routePoints) {
         if (uiState.routePoints.isNotEmpty()) {
-            val boundsBuilder = com.google.android.gms.maps.model.LatLngBounds.builder()
-            uiState.routePoints.forEach { boundsBuilder.include(it) }
-            val bounds = boundsBuilder.build()
+            val builder = com.google.android.gms.maps.model.LatLngBounds.builder()
+            uiState.routePoints.forEach { builder.include(it) }
             cameraPositionState.animate(
-                CameraUpdateFactory.newLatLngBounds(bounds, 100),
-                durationMs = 1000
+                CameraUpdateFactory.newLatLngBounds(builder.build(), 120), 900
             )
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Google Map
-        GoogleMap(
-            modifier = Modifier.fillMaxSize(),
-            cameraPositionState = cameraPositionState,
-            properties = MapProperties(isMyLocationEnabled = locationPermissionGranted),
-            onMapClick = { viewModel.onMapClick(it) },
-            uiSettings = MapUiSettings(
-                zoomControlsEnabled = false,
-                myLocationButtonEnabled = true
+    // Estado del bottom sheet
+    val sheetState = rememberBottomSheetScaffoldState(
+        bottomSheetState = rememberStandardBottomSheetState(
+            initialValue = SheetValue.PartiallyExpanded,
+            skipHiddenState = true
+        )
+    )
+
+    val hasRoute = uiState.routePoints.isNotEmpty()
+    val hasDestination = uiState.destinationPoint != null
+    val hasPickup = uiState.pickupPoint != null
+
+    BottomSheetScaffold(
+        scaffoldState = sheetState,
+        sheetPeekHeight = if (hasRoute) 260.dp else 200.dp,
+        sheetDragHandle = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(36.dp)
+                        .height(4.dp)
+                        .clip(CircleShape)
+                        .background(MapBorder)
+                )
+            }
+        },
+        sheetContainerColor = MapCard,
+        sheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        containerColor = Color.Transparent,
+        sheetContent = {
+            BottomSheetContent(
+                uiState = uiState,
+                locationGranted = locationGranted,
+                onPickupQueryChange = viewModel::updatePickupQuery,
+                onDestinationQueryChange = viewModel::updateDestinationQuery,
+                onPickupPredictionSelect = { viewModel.selectPrediction(it, isPickup = true) },
+                onDestinationPredictionSelect = { viewModel.selectPrediction(it, isPickup = false) },
+                onUseMyLocation = {
+                    if (locationGranted) {
+                        fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
+                            loc?.let {
+                                viewModel.setPickupPoint(
+                                    LocationPoint(it.latitude, it.longitude, "Mi ubicación")
+                                )
+                            }
+                        }
+                    } else {
+                        permLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                    }
+                },
+                onConfirm = { /* navegar a confirmación */ }
             )
+        }
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
         ) {
-            uiState.pickupPoint?.let {
-                Marker(
-                    state = MarkerState(position = LatLng(it.latitude, it.longitude)),
-                    title = "Origen",
-                    snippet = it.address
-                )
+            // ── MAPA a pantalla completa ──────────────────────────────────────
+            GoogleMap(
+                modifier = Modifier.fillMaxSize(),
+                cameraPositionState = cameraPositionState,
+                properties = MapProperties(
+                    isMyLocationEnabled = locationGranted,
+                    mapType = MapType.NORMAL
+                ),
+                uiSettings = MapUiSettings(
+                    zoomControlsEnabled = false,
+                    myLocationButtonEnabled = false,
+                    compassEnabled = true
+                ),
+                onMapClick = { viewModel.onMapClick(it) }
+            ) {
+                // Marcador origen
+                uiState.pickupPoint?.let { pt ->
+                    Marker(
+                        state = MarkerState(LatLng(pt.latitude, pt.longitude)),
+                        title = "Origen",
+                        snippet = pt.address
+                    )
+                }
+                // Marcador destino
+                uiState.destinationPoint?.let { pt ->
+                    Marker(
+                        state = MarkerState(LatLng(pt.latitude, pt.longitude)),
+                        title = "Destino",
+                        snippet = pt.address
+                    )
+                }
+                // Ruta
+                if (uiState.routePoints.isNotEmpty()) {
+                    Polyline(
+                        points = uiState.routePoints,
+                        color = MapYellow,
+                        width = 14f,
+                        geodesic = true
+                    )
+                    // Sombra de la ruta
+                    Polyline(
+                        points = uiState.routePoints,
+                        color = MapYellow.copy(alpha = 0.25f),
+                        width = 22f,
+                        geodesic = true
+                    )
+                }
             }
-            uiState.destinationPoint?.let {
-                Marker(
-                    state = MarkerState(position = LatLng(it.latitude, it.longitude)),
-                    title = "Destino",
-                    snippet = it.address
-                )
+
+            // ── Botón Mi Ubicación flotante ───────────────────────────────────
+            FloatingActionButton(
+                onClick = {
+                    if (locationGranted) {
+                        fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
+                            loc?.let {
+                                cameraPositionState.move(
+                                    CameraUpdateFactory.newLatLngZoom(LatLng(it.latitude, it.longitude), 16f)
+                                )
+                            }
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 16.dp, end = 16.dp)
+                    .size(44.dp)
+                    .zIndex(10f),
+                containerColor = MapCard,
+                contentColor = MapYellow,
+                shape = CircleShape,
+                elevation = FloatingActionButtonDefaults.elevation(6.dp)
+            ) {
+                Icon(Icons.Filled.MyLocation, contentDescription = "Mi ubicación", modifier = Modifier.size(20.dp))
             }
-            if (uiState.routePoints.isNotEmpty()) {
-                Polyline(
-                    points = uiState.routePoints,
-                    color = Color.Blue,
-                    width = 10f
+
+            // ── Indicadores de puntos seleccionados (top) ────────────────────
+            AnimatedVisibility(
+                visible = hasPickup || hasDestination,
+                enter = fadeIn() + slideInVertically(),
+                exit = fadeOut() + slideOutVertically(),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 16.dp, top = 16.dp, end = 72.dp)
+                    .zIndex(10f)
+            ) {
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MapCard.copy(alpha = 0.95f)),
+                    border = BorderStroke(1.dp, MapBorder)
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                        if (hasPickup) {
+                            RoutePointRow(
+                                color = MapGreen,
+                                label = uiState.pickupPoint?.address ?: "Origen",
+                                icon = Icons.Filled.RadioButtonChecked
+                            )
+                        }
+                        if (hasPickup && hasDestination) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(start = 9.dp)
+                                    .width(2.dp)
+                                    .height(10.dp)
+                                    .background(MapBorder)
+                            )
+                        }
+                        if (hasDestination) {
+                            RoutePointRow(
+                                color = MapRed,
+                                label = uiState.destinationPoint?.address ?: "Destino",
+                                icon = Icons.Filled.LocationOn
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─── Fila de punto de ruta ─────────────────────────────────────────────────
+@Composable
+private fun RoutePointRow(
+    color: Color,
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(icon, null, tint = color, modifier = Modifier.size(14.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MapText,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 200.dp)
+        )
+    }
+}
+
+// ─── Contenido del Bottom Sheet ───────────────────────────────────────────────
+@Composable
+private fun BottomSheetContent(
+    uiState: TaxiUiState,
+    locationGranted: Boolean,
+    onPickupQueryChange: (String) -> Unit,
+    onDestinationQueryChange: (String) -> Unit,
+    onPickupPredictionSelect: (PlacePrediction) -> Unit,
+    onDestinationPredictionSelect: (PlacePrediction) -> Unit,
+    onUseMyLocation: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val hasRoute  = uiState.routePoints.isNotEmpty()
+    val canSearch = uiState.pickupPoint != null && uiState.destinationPoint != null
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Título
+        Text(
+            text = if (hasRoute) "Ruta confirmada" else "¿A dónde vamos?",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MapText
+        )
+
+        // ── Campo Origen ──────────────────────────────────────────────────────
+        Column {
+            MapSearchField(
+                value = uiState.pickupSearchQuery,
+                onValueChange = onPickupQueryChange,
+                placeholder = "Punto de partida",
+                leadingDot = MapGreen,
+                trailingContent = {
+                    IconButton(
+                        onClick = onUseMyLocation,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.MyLocation,
+                            contentDescription = "Mi ubicación",
+                            tint = MapBlue,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            )
+            AnimatedVisibility(visible = uiState.pickupPredictions.isNotEmpty()) {
+                PredictionsList(
+                    predictions = uiState.pickupPredictions,
+                    dotColor = MapGreen,
+                    onSelect = onPickupPredictionSelect
                 )
             }
         }
 
-        // Search Overlay
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
+        // Línea conectora
+        Row(
+            modifier = Modifier.padding(start = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(0.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            repeat(5) {
+                Box(
+                    modifier = Modifier
+                        .width(2.dp)
+                        .height(5.dp)
+                        .clip(RoundedCornerShape(1.dp))
+                        .background(MapSubText.copy(alpha = 0.4f))
+                )
+                Spacer(Modifier.width(2.dp))
+            }
+        }
+
+        // ── Campo Destino ─────────────────────────────────────────────────────
+        Column {
+            MapSearchField(
+                value = uiState.destinationSearchQuery,
+                onValueChange = onDestinationQueryChange,
+                placeholder = "¿A dónde vas?",
+                leadingDot = MapRed
+            )
+            AnimatedVisibility(visible = uiState.destinationPredictions.isNotEmpty()) {
+                PredictionsList(
+                    predictions = uiState.destinationPredictions,
+                    dotColor = MapRed,
+                    onSelect = onDestinationPredictionSelect
+                )
+            }
+        }
+
+        // ── Info de ruta ──────────────────────────────────────────────────────
+        AnimatedVisibility(
+            visible = hasRoute && uiState.travelDistance != null,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
         ) {
             Card(
-                elevation = CardDefaults.cardElevation(8.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f))
+                colors = CardDefaults.cardColors(containerColor = MapCardLight),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, MapYellow.copy(alpha = 0.3f))
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "¿A dónde vamos?",
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-
-                    // Pickup Field
-                    OutlinedTextField(
-                        value = uiState.pickupSearchQuery,
-                        onValueChange = { viewModel.updatePickupQuery(it) },
-                        label = { Text("Punto de partida") },
-                        leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.Blue) },
-                        trailingIcon = {
-                            IconButton(onClick = {
-                                if (locationPermissionGranted) {
-                                    fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                                        location?.let {
-                                            viewModel.
-
-                                            setPickupPoint(LocationPoint(it.latitude, it.longitude, "Mi ubicación"))
-                                        }
-                                    }
-                                } else {
-                                    launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-                                }
-                            }) {
-                                Icon(Icons.Default.MyLocation, contentDescription = "Geolocalizar", tint = Color.Blue)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White
-                        )
-                    )
-
-                    if (uiState.pickupPredictions.isNotEmpty()) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 200.dp),
-                            tonalElevation = 4.dp,
-                            shadowElevation = 4.dp
-                        ) {
-                            LazyColumn {
-                                items(uiState.pickupPredictions) { prediction ->
-                                    ListItem(
-                                        headlineContent = { Text(prediction.primaryText) },
-                                        supportingContent = { Text(prediction.secondaryText) },
-                                        modifier = Modifier.clickable { viewModel.selectPrediction(prediction, isPickup = true) }
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Destination Field
-                    OutlinedTextField(
-                        value = uiState.destinationSearchQuery,
-                        onValueChange = { viewModel.updateDestinationQuery(it) },
-                        label = { Text("¿A dónde vas?") },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Red) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White
-                        )
-                    )
-
-                    if (uiState.destinationPredictions.isNotEmpty()) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 200.dp),
-                            tonalElevation = 4.dp,
-                            shadowElevation = 4.dp
-                        ) {
-                            LazyColumn {
-                                items(uiState.destinationPredictions) { prediction ->
-                                    ListItem(
-                                        headlineContent = { Text(prediction.primaryText) },
-                                        supportingContent = { Text(prediction.secondaryText) },
-                                        modifier = Modifier.clickable { viewModel.selectPrediction(prediction, isPickup = false) }
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    if (uiState.travelDistance != null) {
-                        Text(
-                            text = "Distancia: ${uiState.travelDistance}",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Color.DarkGray,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                    }
-
-                    Button(
-                        onClick = { 
-                            // Aquí podrías navegar a una pantalla de seguimiento o mostrar un mensaje
-                            println("Viaje confirmado: ${uiState.travelDistance}")
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = uiState.pickupPoint != null && uiState.destinationPoint != null
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Confirmar Taxi")
+                        Icon(Icons.Filled.Route, null, tint = MapYellow, modifier = Modifier.size(18.dp))
+                        Column {
+                            Text("Distancia estimada", style = MaterialTheme.typography.labelSmall, color = MapSubText)
+                            Text(
+                                uiState.travelDistance ?: "",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MapText
+                            )
+                        }
                     }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Filled.DirectionsCar, null, tint = MapBlue, modifier = Modifier.size(18.dp))
+                        Column {
+                            Text("Precio estimado", style = MaterialTheme.typography.labelSmall, color = MapSubText)
+                            Text("$2.50", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MapText)
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Botón confirmar ───────────────────────────────────────────────────
+        Button(
+            onClick = onConfirm,
+            enabled = canSearch,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(54.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent
+            ),
+            contentPadding = PaddingValues(0.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        if (canSearch)
+                            Brush.horizontalGradient(listOf(MapYellow, MapYellowDk))
+                        else
+                            Brush.horizontalGradient(listOf(MapBorder, MapBorder)),
+                        RoundedCornerShape(16.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        if (canSearch) Icons.Filled.DirectionsCar else Icons.Outlined.DirectionsCar,
+                        contentDescription = null,
+                        tint = if (canSearch) MapDark else MapSubText,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = if (hasRoute) "Confirmar viaje" else "Buscar taxi",
+                        fontWeight = FontWeight.Bold,
+                        color = if (canSearch) MapDark else MapSubText,
+                        fontSize = 16.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ─── Campo de búsqueda del mapa ───────────────────────────────────────────────
+@Composable
+private fun MapSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    leadingDot: Color,
+    trailingContent: (@Composable () -> Unit)? = null
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        placeholder = {
+            Text(placeholder, color = MapSubText, fontSize = 14.sp)
+        },
+        leadingIcon = {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(leadingDot)
+            )
+        },
+        trailingIcon = trailingContent,
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = leadingDot.copy(alpha = 0.7f),
+            unfocusedBorderColor = MapBorder,
+            focusedTextColor = MapText,
+            unfocusedTextColor = MapText,
+            cursorColor = leadingDot,
+            focusedContainerColor = MapCardLight,
+            unfocusedContainerColor = MapCardLight,
+            focusedPlaceholderColor = MapSubText,
+            unfocusedPlaceholderColor = MapSubText
+        ),
+        textStyle = LocalTextStyle.current.copy(fontSize = 14.sp, color = MapText)
+    )
+}
+
+// ─── Lista de predicciones ────────────────────────────────────────────────────
+@Composable
+private fun PredictionsList(
+    predictions: List<PlacePrediction>,
+    dotColor: Color,
+    onSelect: (PlacePrediction) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MapCardLight),
+        border = BorderStroke(1.dp, MapBorder)
+    ) {
+        LazyColumn(modifier = Modifier.heightIn(max = 220.dp)) {
+            items(predictions) { prediction ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(prediction) }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(dotColor.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Outlined.Place,
+                            contentDescription = null,
+                            tint = dotColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = prediction.primaryText,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MapText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = prediction.secondaryText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MapSubText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                if (predictions.last() != prediction) {
+                    HorizontalDivider(color = MapBorder, thickness = 0.5.dp)
                 }
             }
         }

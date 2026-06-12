@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaxiApp Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon">🚕</span>
+    <span class="logo-text">TaxiApp <small>Admin</small></span>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="#" class="nav-item active" data-view="dashboard"><span>📊</span> Dashboard</a>
+    <a href="#" class="nav-item" data-view="drivers"><span>👤</span> Conductores</a>
+    <a href="#" class="nav-item" data-view="queue"><span>🔄</span> Cola de Turnos</a>
+    <a href="#" class="nav-item" data-view="trips"><span>🗺️</span> Viajes</a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="api-status" id="apiStatus">
+      <span class="status-dot"></span> <span id="statusText">Conectando...</span>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+    <h1 class="page-title" id="pageTitle">Dashboard</h1>
+    <div class="topbar-right">
+      <span class="api-badge" id="apiBadge">🔗 Railway</span>
+    </div>
+  </header>
+
+  <!-- VIEWS -->
+
+  <!-- DASHBOARD -->
+  <section class="view active" id="view-dashboard">
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-icon">👤</div><div class="stat-info"><span class="stat-val" id="st-drivers">—</span><span class="stat-label">Conductores</span></div></div>
+      <div class="stat-card"><div class="stat-icon">🧑</div><div class="stat-info"><span class="stat-val" id="st-clients">—</span><span class="stat-label">Clientes</span></div></div>
+      <div class="stat-card"><div class="stat-icon">🗺️</div><div class="stat-info"><span class="stat-val" id="st-trips">—</span><span class="stat-label">Viajes totales</span></div></div>
+      <div class="stat-card accent"><div class="stat-icon">🔄</div><div class="stat-info"><span class="stat-val" id="st-queue">—</span><span class="stat-label">En cola</span></div></div>
+      <div class="stat-card green"><div class="stat-icon">⚡</div><div class="stat-info"><span class="stat-val" id="st-active">—</span><span class="stat-label">Viajes activos</span></div></div>
+    </div>
+    <div class="card mt-4">
+      <div class="card-header"><h2>Cola actual (preview)</h2><button class="btn-sm" onclick="navigate('queue')">Ver completa →</button></div>
+      <div id="dashQueueList" class="queue-preview"></div>
+    </div>
+  </section>
+
+  <!-- CONDUCTORES -->
+  <section class="view" id="view-drivers">
+    <div class="view-header">
+      <h2>Conductores</h2>
+      <button class="btn-primary" onclick="openModal('modalDriver')">+ Registrar conductor</button>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="searchDriver" placeholder="Buscar por nombre, teléfono, placa..." oninput="filterDrivers()">
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="driversTable">
+        <thead><tr><th>#</th><th>Conductor</th><th>Teléfono</th><th>Unidad</th><th>Placa</th><th>Vehículo</th><th>Estado</th><th>Rating</th><th>Acciones</th></tr></thead>
+        <tbody id="driversBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- COLA -->
+  <section class="view" id="view-queue">
+    <div class="view-header">
+      <h2>Cola de Turnos</h2>
+      <button class="btn-secondary" onclick="loadQueue()">↻ Actualizar</button>
+    </div>
+    <div class="queue-container">
+      <div class="queue-list" id="queueList"></div>
+      <div class="queue-sidebar">
+        <div class="card">
+          <h3>Agregar a la cola</h3>
+          <p class="hint">Selecciona un conductor aprobado para agregarlo al final de la cola.</p>
+          <select id="addDriverSelect" class="input-field"></select>
+          <button class="btn-primary mt-2" onclick="addToQueue()">Agregar</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIAJES -->
+  <section class="view" id="view-trips">
+    <div class="view-header">
+      <h2>Viajes</h2>
+      <button class="btn-secondary" onclick="loadTrips()">↻ Actualizar</button>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>ID</th><th>Cliente</th><th>Conductor</th><th>Unidad</th><th>Origen</th><th>Destino</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
+        <tbody id="tripsBody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<!-- MODAL: Registrar Conductor -->
+<div class="modal-overlay" id="modalDriver" onclick="closeModal('modalDriver')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Registrar Conductor</h2>
+      <button class="close-btn" onclick="closeModal('modalDriver')">✕</button>
+    </div>
+    <form id="driverForm" onsubmit="submitDriver(event)">
+      <div class="form-section">
+        <h3>Datos personales</h3>
+        <div class="form-grid">
+          <div class="form-group"><label>Nombre completo *</label><input type="text" name="full_name" required class="input-field" placeholder="Juan Pérez"></div>
+          <div class="form-group"><label>Teléfono *</label><input type="text" name="phone" required class="input-field" placeholder="042400000000"></div>
+          <div class="form-group"><label>Correo</label><input type="email" name="email" class="input-field" placeholder="correo@ejemplo.com"></div>
+          <div class="form-group"><label>Contraseña inicial</label><input type="text" name="password" class="input-field" placeholder="123456" value="123456"></div>
+          <div class="form-group full"><label>URL Foto de perfil</label><input type="url" name="avatar_url" class="input-field" placeholder="https://..."></div>
+        </div>
+      </div>
+      <div class="form-section">
+        <h3>Datos del vehículo</h3>
+        <div class="form-grid">
+          <div class="form-group"><label>N° de Unidad *</label><input type="text" name="unit_number" required class="input-field" placeholder="001"></div>
+          <div class="form-group"><label>Placa *</label><input type="text" name="vehicle_plate" required class="input-field" placeholder="ABC-1234"></div>
+          <div class="form-group"><label>Marca</label><input type="text" name="vehicle_make" class="input-field" placeholder="Toyota"></div>
+          <div class="form-group"><label>Modelo</label><input type="text" name="vehicle_model" class="input-field" placeholder="Corolla"></div>
+          <div class="form-group"><label>Año</label><input type="number" name="vehicle_year" class="input-field" placeholder="2020" min="1990" max="2030"></div>
+          <div class="form-group"><label>Color</label><input type="text" name="vehicle_color" class="input-field" placeholder="Blanco"></div>
+          <div class="form-group"><label>Tipo</label>
+            <select name="vehicle_type" class="input-field">
+              <option value="sedan">Sedán</option>
+              <option value="suv">SUV</option>
+              <option value="van">Van</option>
+              <option value="pickup">Pickup</option>
+            </select>
+          </div>
+          <div class="form-group"><label>N° Licencia</label><input type="text" name="license_number" class="input-field" placeholder="LIC-00000"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="closeModal('modalDriver')">Cancelar</button>
+        <button type="submit" class="btn-primary" id="submitDriverBtn">Registrar conductor</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

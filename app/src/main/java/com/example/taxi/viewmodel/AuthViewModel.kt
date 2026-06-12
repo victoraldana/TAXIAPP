@@ -32,6 +32,10 @@ class AuthViewModel : ViewModel() {
         _selectedRole.value = role
     }
 
+    // ── Usuario logueado (persiste tras clearAuthState) ───────────────────────
+    private val _loggedUser = MutableStateFlow<AuthModels.UserData?>(null)
+    val loggedUser: StateFlow<AuthModels.UserData?> = _loggedUser.asStateFlow()
+
     fun clearAuthState() {
         _authState.value = null
     }
@@ -112,6 +116,7 @@ class AuthViewModel : ViewModel() {
                 if (response.isSuccessful) {
                     val body = response.body()
                     if (body?.success == true && body.data != null) {
+                        _loggedUser.value = body.data.user
                         _authState.value = AuthModels.AuthResult.Success(
                             user = body.data.user,
                             tokens = body.data.tokens
@@ -154,6 +159,7 @@ class AuthViewModel : ViewModel() {
                 if (response.isSuccessful) {
                     val body = response.body()
                     if (body?.success == true && body.data != null) {
+                        _loggedUser.value = body.data.user
                         _authState.value = AuthModels.AuthResult.Success(
                             user = body.data.user,
                             tokens = body.data.tokens
