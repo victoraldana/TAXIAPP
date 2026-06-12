@@ -4,9 +4,16 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
 import authRoutes from './routes/authRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import { runMigration } from './db/migrate.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+// Carpeta admin: dos niveles arriba de src/ → raíz del repo → admin/
+const ADMIN_DIR = join(__dirname, '../../admin');
 
 dotenv.config();
 
@@ -21,7 +28,18 @@ let migrationError  = null;
 // MIDDLEWARES
 // =============================================================
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc:  ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      styleSrc:   ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
+      fontSrc:    ["'self'", "https://fonts.gstatic.com"],
+      connectSrc: ["'self'", "https://taxiapp-production-1a53.up.railway.app"],
+      imgSrc:     ["'self'", "data:", "https:"],
+    },
+  },
+}));
 
 app.use(cors({
   origin: (origin, cb) => cb(null, true),
@@ -92,6 +110,16 @@ app.get('/migrate', async (_req, res) => {
     });
   }
 });
+
+// =============================================================
+// ADMIN PANEL (archivos estáticos)
+// =============================================================
+
+// Redirigir /admin → /admin/
+app.get('/admin', (_req, res) => res.redirect('/admin/'));
+
+// Servir los archivos HTML/CSS/JS del panel de administración
+app.use('/admin', express.static(ADMIN_DIR));
 
 // =============================================================
 // RUTAS API
