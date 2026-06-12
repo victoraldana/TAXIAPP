@@ -1,0 +1,432 @@
+import { query, withTransaction } from '../db/pool.js';
+import bcrypt from 'bcryptjs';
+
+// ──────────────────────────────────────────────────────────────────────────────
+// DASHBOARD — estadísticas generales
+// ──────────────────────────────────────────────────────────────────────────────
+export const getDashboard = async (_req, res) => {
+  try {
+    const [drivers, clients, trips, queue, activeTrips] = await Promise.all([
+      query("SELECT COUNT(*) FROM users WHERE role_id=(SELECT id FROM roles WHERE name='driver')"),
+      query("SELECT COUNT(*) FROM users WHERE role_id=(SELECT id FROM roles WHERE name='client')"),
+      query("SELECT COUNT(*) FROM trips"),
+      query("SELECT COUNT(*) FROM driver_queue WHERE is_active=TRUE"),
+      query("SELECT COUNT(*) FROM trips WHERE status IN ('pending','accepted','on_route','in_progress')"),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        total_drivers:  parseInt(drivers.rows[0].count),
+        total_clients:  parseInt(clients.rows[0].count),
+        total_trips:    parseInt(trips.rows[0].count),
+        queue_size:     parseInt(queue.rows[0].count),
+        active_trips:   parseInt(activeTrips.rows[0].count),
+      },
+    });
+  } catch (err) {
+    console.error('getDashboard:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CONDUCTORES — listar
+// ──────────────────────────────────────────────────────────────────────────────
+export const listDrivers = async (_req, res) => {
+  try {
+    const result = await query(`
+      SELECT u.id, u.full_name, u.phone, u.email, u.avatar_url,
+             u.is_active, u.is_verified, u.created_at,
+             dp.unit_number, dp.vehicle_make, dp.vehicle_model, dp.vehicle_year,
+             dp.vehicle_plate, dp.vehicle_color, dp.vehicle_type,
+             dp.license_number, dp.is_available, dp.is_approved,
+             dp.rating, dp.total_trips,
+             CASE WHEN dq.id IS NOT NULL AND dq.is_active THEN TRUE ELSE FALSE END AS in_queue,
+             dq.queue_position
+      FROM users u
+      JOIN roles r ON u.role_id = r.id AND r.name = 'driver'
+      LEFT JOIN driver_profiles dp ON dp.user_id = u.id
+      LEFT JOIN driver_queue dq ON dq.driver_id = u.id AND dq.is_active = TRUE
+      ORDER BY u.created_at DESC
+    `);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('listDrivers:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CONDUCTORES — registrar
+// ──────────────────────────────────────────────────────────────────────────────
+export const registerDriver = async (req, res) => {
+  const {
+    full_name, phone, email, password = '123456',
+    unit_number, vehicle_make, vehicle_model, vehicle_year,
+    vehicle_plate, vehicle_color, vehicle_type = 'sedan',
+    license_number, avatar_url,
+  } = req.body;
+
+  if (!full_name || !phone || !unit_number || !vehicle_plate) {
+    return res.status(400).json({
+      success: false,
+      message: 'Campos requeridos: full_name, phone, unit_number, vehicle_plate',
+    });
+  }
+
+  try {
+    // Verificar duplicados
+    const dup = await query('SELECT id FROM users WHERE phone=$1', [phone]);
+    if (dup.rows.length > 0)
+      return res.status(409).json({ success: false, message: 'Ya existe un conductor con ese teléfono.' });
+
+    const dupPlate = await query('SELECT id FROM driver_profiles WHERE vehicle_plate=$1', [vehicle_plate]);
+    if (dupPlate.rows.length > 0)
+      return res.status(409).json({ success: false, message: 'Ya existe un conductor con esa placa.' });
+
+    const dupUnit = await query('SELECT id FROM driver_profiles WHERE unit_number=$1', [unit_number]);
+    if (dupUnit.rows.length > 0)
+      return res.status(409).json({ success: false, message: 'El número de unidad ya está en uso.' });
+
+    const result = await withTransaction(async (client) => {
+      const roleRes = await client.query("SELECT id FROM roles WHERE name='driver'");
+      const roleId  = roleRes.rows[0].id;
+      const pwHash  = await bcrypt.hash(password, 10);
+
+      const userRes = await client.query(
+        `INSERT INTO users (role_id, full_name, phone, email, password_hash, avatar_url,
+           is_active, is_verified, phone_verified_at, kyc_status)
+         VALUES ($1,$2,$3,$4,$5,$6,TRUE,TRUE,NOW(),'approved')
+         RETURNING id, full_name, phone, email, avatar_url`,
+        [roleId, full_name, phone, email || null, pwHash, avatar_url || null]
+      );
+      const user = userRes.rows[0];
+
+      await client.query(
+        `INSERT INTO driver_profiles (user_id, unit_number, vehicle_make, vehicle_model,
+           vehicle_year, vehicle_plate, vehicle_color, vehicle_type, license_number, is_approved)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,TRUE)`,
+        [user.id, unit_number, vehicle_make, vehicle_model,
+         vehicle_year, vehicle_plate.toUpperCase(), vehicle_color, vehicle_type, license_number]
+      );
+
+      return user;
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Conductor registrado exitosamente.',
+      data: result,
+    });
+  } catch (err) {
+    console.error('registerDriver:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CONDUCTOR — actualizar
+// ──────────────────────────────────────────────────────────────────────────────
+export const updateDriver = async (req, res) => {
+  const { id } = req.params;
+  const { is_active, is_approved, is_available, avatar_url,
+          vehicle_make, vehicle_model, vehicle_color, unit_number } = req.body;
+
+  try {
+    if (is_active !== undefined)
+      await query('UPDATE users SET is_active=$1 WHERE id=$2', [is_active, id]);
+
+    await query(
+      `UPDATE driver_profiles
+       SET is_approved=COALESCE($1,is_approved),
+           is_available=COALESCE($2,is_available),
+           vehicle_make=COALESCE($3,vehicle_make),
+           vehicle_model=COALESCE($4,vehicle_model),
+           vehicle_color=COALESCE($5,vehicle_color),
+           unit_number=COALESCE($6,unit_number),
+           updated_at=NOW()
+       WHERE user_id=$7`,
+      [is_approved, is_available, vehicle_make, vehicle_model, vehicle_color, unit_number, id]
+    );
+
+    if (avatar_url)
+      await query('UPDATE users SET avatar_url=$1 WHERE id=$2', [avatar_url, id]);
+
+    res.json({ success: true, message: 'Conductor actualizado.' });
+  } catch (err) {
+    console.error('updateDriver:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// COLA — ver cola actual
+// ──────────────────────────────────────────────────────────────────────────────
+export const getQueue = async (_req, res) => {
+  try {
+    const result = await query(`
+      SELECT dq.id AS queue_id, dq.queue_position, dq.added_at,
+             u.id AS driver_id, u.full_name, u.phone, u.avatar_url,
+             dp.unit_number, dp.vehicle_make, dp.vehicle_model,
+             dp.vehicle_plate, dp.vehicle_color, dp.vehicle_type,
+             dp.rating, dp.total_trips
+      FROM driver_queue dq
+      JOIN users u ON dq.driver_id = u.id
+      JOIN driver_profiles dp ON dp.user_id = u.id
+      WHERE dq.is_active = TRUE
+      ORDER BY dq.queue_position ASC
+    `);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('getQueue:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// COLA — agregar conductor
+// ──────────────────────────────────────────────────────────────────────────────
+export const addToQueue = async (req, res) => {
+  const { driver_id } = req.params;
+  try {
+    // Verificar que no esté ya en la cola
+    const existing = await query(
+      'SELECT id FROM driver_queue WHERE driver_id=$1 AND is_active=TRUE', [driver_id]
+    );
+    if (existing.rows.length > 0)
+      return res.status(409).json({ success: false, message: 'El conductor ya está en la cola.' });
+
+    // Obtener la posición máxima actual
+    const maxPos = await query(
+      'SELECT COALESCE(MAX(queue_position),0) AS max_pos FROM driver_queue WHERE is_active=TRUE'
+    );
+    const nextPos = parseInt(maxPos.rows[0].max_pos) + 1;
+
+    await query(
+      'INSERT INTO driver_queue (driver_id, queue_position) VALUES ($1,$2)',
+      [driver_id, nextPos]
+    );
+
+    // Actualizar disponibilidad del conductor
+    await query('UPDATE driver_profiles SET is_available=TRUE WHERE user_id=$1', [driver_id]);
+
+    res.json({ success: true, message: 'Conductor agregado a la cola.', position: nextPos });
+  } catch (err) {
+    console.error('addToQueue:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// COLA — quitar conductor
+// ──────────────────────────────────────────────────────────────────────────────
+export const removeFromQueue = async (req, res) => {
+  const { driver_id } = req.params;
+  try {
+    await query(
+      'UPDATE driver_queue SET is_active=FALSE WHERE driver_id=$1 AND is_active=TRUE',
+      [driver_id]
+    );
+    await query('UPDATE driver_profiles SET is_available=FALSE WHERE user_id=$1', [driver_id]);
+    // Reordenar posiciones
+    await reorderQueue();
+    res.json({ success: true, message: 'Conductor removido de la cola.' });
+  } catch (err) {
+    console.error('removeFromQueue:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// COLA — reordenar (mover arriba/abajo)
+// ──────────────────────────────────────────────────────────────────────────────
+export const moveInQueue = async (req, res) => {
+  const { queue_id } = req.params;
+  const { direction } = req.body; // 'up' | 'down'
+  try {
+    const current = await query(
+      'SELECT queue_position FROM driver_queue WHERE id=$1 AND is_active=TRUE', [queue_id]
+    );
+    if (current.rows.length === 0)
+      return res.status(404).json({ success: false, message: 'Entrada de cola no encontrada.' });
+
+    const pos = current.rows[0].queue_position;
+    const swapPos = direction === 'up' ? pos - 1 : pos + 1;
+
+    const swap = await query(
+      'SELECT id FROM driver_queue WHERE queue_position=$1 AND is_active=TRUE', [swapPos]
+    );
+    if (swap.rows.length === 0)
+      return res.status(400).json({ success: false, message: 'No se puede mover más en esa dirección.' });
+
+    // Intercambiar posiciones
+    await query('UPDATE driver_queue SET queue_position=$1 WHERE id=$2', [swapPos, queue_id]);
+    await query('UPDATE driver_queue SET queue_position=$1 WHERE id=$2', [pos, swap.rows[0].id]);
+
+    res.json({ success: true, message: 'Posición actualizada.' });
+  } catch (err) {
+    console.error('moveInQueue:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// VIAJES — listar con detalle
+// ──────────────────────────────────────────────────────────────────────────────
+export const listTrips = async (_req, res) => {
+  try {
+    const result = await query(`
+      SELECT t.*,
+             uc.full_name AS client_name, uc.phone AS client_phone,
+             ud.full_name AS driver_name, ud.phone AS driver_phone,
+             dp.unit_number, dp.vehicle_plate, dp.vehicle_make, dp.vehicle_model
+      FROM trips t
+      LEFT JOIN users uc ON t.client_id = uc.id
+      LEFT JOIN users ud ON t.driver_id = ud.id
+      LEFT JOIN driver_profiles dp ON dp.user_id = t.driver_id
+      ORDER BY t.created_at DESC
+      LIMIT 100
+    `);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('listTrips:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// VIAJES — asignar conductor (próximo en cola)
+// ──────────────────────────────────────────────────────────────────────────────
+export const assignNextDriver = async (req, res) => {
+  const { trip_id } = req.params;
+  try {
+    // Obtener primer conductor de la cola
+    const queueRes = await query(`
+      SELECT dq.id AS queue_id, dq.driver_id
+      FROM driver_queue dq
+      JOIN driver_profiles dp ON dp.user_id = dq.driver_id
+      WHERE dq.is_active = TRUE AND dp.is_approved = TRUE
+      ORDER BY dq.queue_position ASC
+      LIMIT 1
+    `);
+
+    if (queueRes.rows.length === 0)
+      return res.status(404).json({ success: false, message: 'No hay conductores disponibles en la cola.' });
+
+    const { queue_id, driver_id } = queueRes.rows[0];
+
+    await withTransaction(async (client) => {
+      // Asignar al viaje
+      await client.query(
+        `UPDATE trips SET driver_id=$1, status='accepted', accepted_at=NOW() WHERE id=$2`,
+        [driver_id, trip_id]
+      );
+      // Sacar de la cola (va al final cuando termine el viaje)
+      await client.query(
+        'UPDATE driver_queue SET is_active=FALSE WHERE id=$1', [queue_id]
+      );
+      await client.query(
+        'UPDATE driver_profiles SET is_available=FALSE WHERE user_id=$1', [driver_id]
+      );
+    });
+
+    // Obtener datos completos del conductor para respuesta
+    const driverData = await query(`
+      SELECT u.id, u.full_name, u.phone, u.avatar_url,
+             dp.unit_number, dp.vehicle_make, dp.vehicle_model,
+             dp.vehicle_year, dp.vehicle_plate, dp.vehicle_color, dp.vehicle_type,
+             dp.rating, dp.total_trips
+      FROM users u
+      JOIN driver_profiles dp ON dp.user_id = u.id
+      WHERE u.id = $1
+    `, [driver_id]);
+
+    res.json({
+      success: true,
+      message: 'Conductor asignado exitosamente.',
+      data: { driver: driverData.rows[0] },
+    });
+  } catch (err) {
+    console.error('assignNextDriver:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// VIAJES — crear viaje y asignar conductor automáticamente
+// ──────────────────────────────────────────────────────────────────────────────
+export const createTrip = async (req, res) => {
+  const {
+    client_id, origin_address, origin_lat, origin_lng,
+    dest_address, dest_lat, dest_lng,
+    estimated_fare, distance_km, payment_method = 'cash',
+  } = req.body;
+
+  try {
+    // Crear el viaje
+    const tripRes = await query(
+      `INSERT INTO trips (client_id, origin_address, origin_lat, origin_lng,
+         dest_address, dest_lat, dest_lng, estimated_fare, distance_km, payment_method)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       RETURNING id`,
+      [client_id, origin_address, origin_lat, origin_lng,
+       dest_address, dest_lat, dest_lng, estimated_fare, distance_km, payment_method]
+    );
+    const tripId = tripRes.rows[0].id;
+
+    // Buscar primer conductor en la cola
+    const queueRes = await query(`
+      SELECT dq.id AS queue_id, dq.driver_id
+      FROM driver_queue dq
+      JOIN driver_profiles dp ON dp.user_id = dq.driver_id
+      WHERE dq.is_active = TRUE AND dp.is_approved = TRUE
+      ORDER BY dq.queue_position ASC
+      LIMIT 1
+    `);
+
+    let driverData = null;
+
+    if (queueRes.rows.length > 0) {
+      const { queue_id, driver_id } = queueRes.rows[0];
+      await withTransaction(async (client) => {
+        await client.query(
+          `UPDATE trips SET driver_id=$1, status='accepted', accepted_at=NOW() WHERE id=$2`,
+          [driver_id, tripId]
+        );
+        await client.query('UPDATE driver_queue SET is_active=FALSE WHERE id=$1', [queue_id]);
+        await client.query('UPDATE driver_profiles SET is_available=FALSE WHERE user_id=$1', [driver_id]);
+      });
+
+      const dr = await query(`
+        SELECT u.id, u.full_name, u.phone, u.avatar_url,
+               dp.unit_number, dp.vehicle_make, dp.vehicle_model,
+               dp.vehicle_year, dp.vehicle_plate, dp.vehicle_color, dp.vehicle_type,
+               dp.rating, dp.total_trips
+        FROM users u JOIN driver_profiles dp ON dp.user_id = u.id WHERE u.id=$1
+      `, [driver_id]);
+      driverData = dr.rows[0];
+    }
+
+    res.status(201).json({
+      success: true,
+      message: driverData ? 'Viaje creado y conductor asignado.' : 'Viaje creado. Sin conductores disponibles.',
+      data: { trip_id: tripId, driver: driverData },
+    });
+  } catch (err) {
+    console.error('createTrip:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Helper: reordenar la cola
+// ──────────────────────────────────────────────────────────────────────────────
+async function reorderQueue() {
+  const rows = await query(
+    'SELECT id FROM driver_queue WHERE is_active=TRUE ORDER BY queue_position ASC'
+  );
+  for (let i = 0; i < rows.rows.length; i++) {
+    await query('UPDATE driver_queue SET queue_position=$1 WHERE id=$2', [i + 1, rows.rows[i].id]);
+  }
+}

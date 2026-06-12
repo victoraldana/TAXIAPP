@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 
 import authRoutes from './routes/authRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 import { runMigration } from './db/migrate.js';
 
 dotenv.config();
@@ -96,7 +97,8 @@ app.get('/migrate', async (_req, res) => {
 // RUTAS API
 // =============================================================
 
-app.use('/api/auth', authRoutes);
+app.use('/api/auth',  authRoutes);
+app.use('/api/admin', adminRoutes);
 
 // 404
 app.use('*', (req, res) => res.status(404).json({

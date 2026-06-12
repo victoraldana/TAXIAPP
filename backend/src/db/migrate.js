@@ -62,6 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active);
 CREATE TABLE IF NOT EXISTS driver_profiles (
     id               UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id          UUID         NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    unit_number      VARCHAR(20)  UNIQUE,
     vehicle_make     VARCHAR(80),
     vehicle_model    VARCHAR(80),
     vehicle_year     SMALLINT,
@@ -159,6 +160,17 @@ CREATE TABLE IF NOT EXISTS otp_codes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_otp_target ON otp_codes(target, type);
+
+CREATE TABLE IF NOT EXISTS driver_queue (
+    id             UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+    driver_id      UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    queue_position INTEGER     NOT NULL DEFAULT 0,
+    is_active      BOOLEAN     DEFAULT TRUE,
+    added_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_queue_active   ON driver_queue(is_active, queue_position);
+CREATE INDEX IF NOT EXISTS idx_queue_driver   ON driver_queue(driver_id);
 
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
