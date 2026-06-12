@@ -12,8 +12,6 @@ import adminRoutes from './routes/adminRoutes.js';
 import { runMigration } from './db/migrate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// Carpeta admin: dos niveles arriba de src/ → raíz del repo → admin/
-const ADMIN_DIR = join(__dirname, '../../admin');
 
 dotenv.config();
 
@@ -113,13 +111,9 @@ app.get('/migrate', async (_req, res) => {
 
 // =============================================================
 // ADMIN PANEL (archivos estáticos)
+// Carpeta: backend/public/admin (dentro del Root Directory de Railway)
 // =============================================================
-
-// Redirigir /admin → /admin/
-app.get('/admin', (_req, res) => res.redirect('/admin/'));
-
-// Servir los archivos HTML/CSS/JS del panel de administración
-app.use('/admin', express.static(ADMIN_DIR));
+app.use('/admin', express.static(join(__dirname, '../public/admin')));
 
 // =============================================================
 // RUTAS API
