@@ -65,6 +65,8 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String) {
     val uiState by viewModel.uiState.collectAsState()
     val tripState by viewModel.tripState.collectAsState()
 
+    val context = LocalContext.current
+
     // ── Si el viaje fue asignado y no hay conductor, reseteamos la demo ─────────
     LaunchedEffect(tripState) {
         when (val state = tripState) {
@@ -81,7 +83,7 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String) {
             else -> {}
         }
     }
-    val context = LocalContext.current
+    
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     // Inicializar Places
