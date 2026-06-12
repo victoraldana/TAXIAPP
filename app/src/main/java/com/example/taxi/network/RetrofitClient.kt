@@ -1,17 +1,25 @@
 package com.example.taxi.network
 
+import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
 
-    // Para emulador Android: 10.0.2.2 apunta a localhost del host
-    // Para dispositivo físico: usa la IP de tu PC en la red local (ej: 192.168.1.X)
-    private const val BASE_URL = "http://10.0.2.2:3000/"
+    // 🚀 Backend desplegado en Railway
+    private const val BASE_URL = "https://taxiapp-production-1a53.up.railway.app/"
+
+    private val okHttpClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .build()
 
     val apiService: ApiService by lazy {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
+            .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(ApiService::class.java)

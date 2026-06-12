@@ -12,25 +12,27 @@ dotenv.config();
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
+// Estado de la migración (para reportarlo en /health)
+let migrationStatus = 'pending';
+let migrationError  = null;
+
 // =============================================================
-// SEGURIDAD
+// MIDDLEWARES
 // =============================================================
 
 app.use(helmet());
 
-// CORS: permite apps móviles (sin origin) y cualquier origin configurado
 app.use(cors({
-  origin: (origin, cb) => cb(null, true), // móviles no envían origin
+  origin: (origin, cb) => cb(null, true),
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 }));
 
-// Rate limit global
 app.use(rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   max:      parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 200,
-  message:  { success: false, message: 'Demasiadas solicitudes. Inténtalo más tarde.', code: 'RATE_LIMIT_EXCEEDED' },
+  message:  { success: false, message: 'Demasiadas solicitudes.', code: 'RATE_LIMIT_EXCEEDED' },
   standardHeaders: true,
   legacyHeaders: false,
 }));
@@ -39,7 +41,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // =============================================================
-// RUTAS
+// RUTAS DE SISTEMA
 // =============================================================
 
 app.get('/', (_req, res) => res.json({
@@ -47,15 +49,16 @@ app.get('/', (_req, res) => res.json({
   message: '🚕 TaxiApp API',
   version: '2.0.0',
   endpoints: {
-    health:       'GET  /health',
-    otpSend:      'POST /api/auth/otp/send',
-    otpVerify:    'POST /api/auth/otp/verify',
-    register:     'POST /api/auth/register',
-    loginPhone:   'POST /api/auth/login/phone',
-    loginEmail:   'POST /api/auth/login',
-    refresh:      'POST /api/auth/refresh',
-    logout:       'POST /api/auth/logout',
-    me:           'GET  /api/auth/me',
+    health:     'GET  /health',
+    migrate:    'GET  /migrate  ← forzar migración',
+    otpSend:    'POST /api/auth/otp/send',
+    otpVerify:  'POST /api/auth/otp/verify',
+    register:   'POST /api/auth/register',
+    loginPhone: 'POST /api/auth/login/phone',
+    loginEmail: 'POST /api/auth/login',
+    refresh:    'POST /api/auth/refresh',
+    logout:     'POST /api/auth/logout',
+    me:         'GET  /api/auth/me',
   },
 }));
 
@@ -66,7 +69,32 @@ app.get('/health', (_req, res) => res.json({
   timestamp: new Date().toISOString(),
   environment: process.env.NODE_ENV || 'development',
   dev_mode: process.env.DEV_MODE !== 'false',
+  db_migration: migrationStatus,
+  ...(migrationError && { migration_error: migrationError }),
 }));
+
+// Endpoint para forzar la migración desde el navegador (Railway)
+app.get('/migrate', async (_req, res) => {
+  try {
+    migrationStatus = 'running';
+    migrationError  = null;
+    await runMigration();
+    migrationStatus = 'ok';
+    res.json({ success: true, message: 'Migración ejecutada correctamente ✅' });
+  } catch (err) {
+    migrationStatus = 'failed';
+    migrationError  = err.message;
+    res.status(500).json({
+      success: false,
+      message: 'Error en migración',
+      error: err.message,
+    });
+  }
+});
+
+// =============================================================
+// RUTAS API
+// =============================================================
 
 app.use('/api/auth', authRoutes);
 
@@ -84,21 +112,15 @@ app.use((err, _req, res, _next) => {
     success: false,
     message: 'Error interno del servidor.',
     code: 'INTERNAL_ERROR',
-    ...(process.env.NODE_ENV !== 'production' && { detail: err.message }),
+    detail: err.message, // siempre mostramos el detalle para diagnóstico
   });
 });
 
 // =============================================================
-// ARRANQUE: migrar DB → levantar servidor
+// ARRANQUE
 // =============================================================
 async function start() {
-  try {
-    await runMigration();
-  } catch (err) {
-    // Si la migración falla (ej. schema ya existe), loguear y continuar
-    console.warn('⚠️  Migración omitida o con advertencia:', err.message);
-  }
-
+  // Levantar servidor primero (Railway necesita que escuche antes del healthcheck)
   app.listen(PORT, '0.0.0.0', () => {
     console.log('');
     console.log('🚕 ================================');
@@ -110,6 +132,17 @@ async function start() {
     console.log('🚕 ================================');
     console.log('');
   });
+
+  // Migración después del arranque
+  try {
+    await runMigration();
+    migrationStatus = 'ok';
+  } catch (err) {
+    migrationStatus = 'failed';
+    migrationError  = err.message;
+    console.error('❌ Migración falló:', err.message);
+    console.error('👉 Visita /migrate para reintentarlo manualmente');
+  }
 }
 
 start();
