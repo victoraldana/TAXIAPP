@@ -33,7 +33,9 @@ export async function runMigration() {
     console.log('🚕 Ejecutando migración...');
 
     // 1. Aplicar schema.sql
-    const schemaPath = resolve(__dirname, '../../../database/schema.sql');
+    // Desde src/db/ subimos 2 niveles para llegar a la raíz del backend
+    const schemaPath = resolve(__dirname, '../../database/schema.sql');
+    console.log('📄 Schema path:', schemaPath);
     const sql = readFileSync(schemaPath, 'utf8');
     await client.query(sql);
     console.log('✅ Schema aplicado.');
