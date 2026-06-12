@@ -1,6 +1,8 @@
 package com.example.taxi.network
 
 import com.example.taxi.model.AuthModels
+import com.example.taxi.model.CreateTripRequest
+import com.example.taxi.model.CreateTripResponse
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -54,4 +56,11 @@ interface ApiService {
     suspend fun getMe(
         @Header("Authorization") token: String
     ): Response<AuthModels.MeResponse>
+
+    // ── Viajes ────────────────────────────────────────────────────────────────
+
+    @POST("api/admin/trips")
+    suspend fun createTrip(
+        @Body request: CreateTripRequest
+    ): Response<CreateTripResponse>
 }

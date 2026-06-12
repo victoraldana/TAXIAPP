@@ -54,11 +54,56 @@ private val MapGreen     = Color(0xFF4CAF50)
 private val MapRed       = Color(0xFFEF5350)
 private val MapBlue      = Color(0xFF4FC3F7)
 
+import android.widget.Toast
+import com.example.taxi.ui.AssignedDriverInfo
+import com.example.taxi.ui.DriverAssignedScreen
+import com.example.taxi.viewmodel.TripState
+
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
 @Composable
-fun ClientSearchScreen(viewModel: TaxiViewModel) {
+fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String) {
     val uiState by viewModel.uiState.collectAsState()
+    val tripState by viewModel.tripState.collectAsState()
+
+    // ── Si el viaje fue asignado, mostramos la pantalla 3D ────────────────────
+    when (val state = tripState) {
+        is TripState.Success -> {
+            val d = state.driver
+            if (d != null) {
+                DriverAssignedScreen(
+                    driver = AssignedDriverInfo(
+                        driverId = d.id,
+                        fullName = d.fullName,
+                        phone = d.phone,
+                        avatarUrl = d.avatarUrl,
+                        unitNumber = d.unitNumber,
+                        vehicleMake = d.vehicleMake ?: "",
+                        vehicleModel = d.vehicleModel ?: "",
+                        vehicleYear = d.vehicleYear,
+                        vehiclePlate = d.vehiclePlate,
+                        vehicleColor = d.vehicleColor ?: "gris",
+                        vehicleType = d.vehicleType ?: "sedan",
+                        rating = d.rating,
+                        totalTrips = d.totalTrips
+                    ),
+                    originAddress = uiState.pickupPoint?.address ?: "",
+                    destAddress = uiState.destinationPoint?.address ?: "",
+                    onCancel = { viewModel.resetTrip() },
+                    onContact = { /* TODO: Intent para llamada */ }
+                )
+                return
+            } else {
+                Toast.makeText(LocalContext.current, "Buscando conductor...", Toast.LENGTH_SHORT).show()
+                viewModel.resetTrip() // Si no hay en cola, lo reseteamos para esta demo
+            }
+        }
+        is TripState.Error -> {
+            Toast.makeText(LocalContext.current, state.message, Toast.LENGTH_LONG).show()
+            viewModel.resetTrip()
+        }
+        else -> {}
+    }
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
@@ -146,6 +191,7 @@ fun ClientSearchScreen(viewModel: TaxiViewModel) {
         sheetContent = {
             BottomSheetContent(
                 uiState = uiState,
+                tripState = tripState,
                 locationGranted = locationGranted,
                 onPickupQueryChange = viewModel::updatePickupQuery,
                 onDestinationQueryChange = viewModel::updateDestinationQuery,
@@ -164,7 +210,9 @@ fun ClientSearchScreen(viewModel: TaxiViewModel) {
                         permLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                     }
                 },
-                onConfirm = { /* navegar a confirmación */ }
+                onConfirm = { 
+                    if (hasRoute) viewModel.confirmTrip(clientId)
+                }
             )
         }
     ) { innerPadding ->
@@ -321,6 +369,7 @@ private fun RoutePointRow(
 @Composable
 private fun BottomSheetContent(
     uiState: TaxiUiState,
+    tripState: TripState,
     locationGranted: Boolean,
     onPickupQueryChange: (String) -> Unit,
     onDestinationQueryChange: (String) -> Unit,
@@ -460,9 +509,10 @@ private fun BottomSheetContent(
         }
 
         // ── Botón confirmar ───────────────────────────────────────────────────
+        val isLoading = tripState is TripState.Loading
         Button(
             onClick = onConfirm,
-            enabled = canSearch,
+            enabled = canSearch && !isLoading,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(54.dp),
@@ -477,7 +527,7 @@ private fun BottomSheetContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
-                        if (canSearch)
+                        if (canSearch && !isLoading)
                             Brush.horizontalGradient(listOf(MapYellow, MapYellowDk))
                         else
                             Brush.horizontalGradient(listOf(MapBorder, MapBorder)),
@@ -490,15 +540,15 @@ private fun BottomSheetContent(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(
-                        if (canSearch) Icons.Filled.DirectionsCar else Icons.Outlined.DirectionsCar,
+                        if (canSearch && !isLoading) Icons.Filled.DirectionsCar else Icons.Outlined.DirectionsCar,
                         contentDescription = null,
-                        tint = if (canSearch) MapDark else MapSubText,
+                        tint = if (canSearch && !isLoading) MapDark else MapSubText,
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        text = if (hasRoute) "Confirmar viaje" else "Buscar taxi",
+                        text = if (isLoading) "Confirmando..." else if (hasRoute) "Confirmar viaje" else "Buscar taxi",
                         fontWeight = FontWeight.Bold,
-                        color = if (canSearch) MapDark else MapSubText,
+                        color = if (canSearch && !isLoading) MapDark else MapSubText,
                         fontSize = 16.sp
                     )
                 }

@@ -2,6 +2,9 @@ package com.example.taxi.viewmodel
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.taxi.model.CreateTripRequest
+import com.example.taxi.model.DriverData
 import com.example.taxi.model.LocationPoint
 import com.example.taxi.model.PlacePrediction
 import com.example.taxi.model.UserRole
@@ -9,6 +12,7 @@ import com.example.taxi.model.toPlacePrediction
 import com.example.taxi.model.DirectionsService
 import com.example.taxi.model.decodePolyline
 import com.example.taxi.BuildConfig
+import com.example.taxi.network.RetrofitClient
 import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRequest
 import com.google.android.libraries.places.api.net.FetchPlaceRequest
 import com.google.android.libraries.places.api.net.PlacesClient
@@ -18,6 +22,7 @@ import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.Call
@@ -39,9 +44,19 @@ data class TaxiUiState(
     val isSearching: Boolean = false
 )
 
+sealed class TripState {
+    object Idle    : TripState()
+    object Loading : TripState()
+    data class Success(val driver: DriverData?, val tripId: String) : TripState()
+    data class Error(val message: String) : TripState()
+}
+
 class TaxiViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(TaxiUiState())
     val uiState: StateFlow<TaxiUiState> = _uiState.asStateFlow()
+
+    private val _tripState = MutableStateFlow<TripState>(TripState.Idle)
+    val tripState: StateFlow<TripState> = _tripState.asStateFlow()
 
     private var placesClient: PlacesClient? = null
     private var sessionToken: AutocompleteSessionToken? = null
@@ -218,5 +233,49 @@ class TaxiViewModel : ViewModel() {
         } else {
             Log.d("TaxiViewModel", "Cannot calculate route: missing pickup or destination")
         }
+    }
+
+    // ── Confirmar viaje → backend ─────────────────────────────────────────────
+    fun confirmTrip(clientId: String) {
+        val pickup = _uiState.value.pickupPoint ?: return
+        val dest   = _uiState.value.destinationPoint ?: return
+
+        _tripState.value = TripState.Loading
+
+        viewModelScope.launch {
+            try {
+                val request = CreateTripRequest(
+                    clientId      = clientId,
+                    originAddress = pickup.address,
+                    originLat     = pickup.latitude,
+                    originLng     = pickup.longitude,
+                    destAddress   = dest.address,
+                    destLat       = dest.latitude,
+                    destLng       = dest.longitude,
+                    distanceKm    = _uiState.value.travelDistance
+                        ?.replace(Regex("[^0-9.]"), "")?.toDoubleOrNull(),
+                )
+
+                val response = RetrofitClient.api.createTrip(request)
+                if (response.isSuccessful && response.body()?.success == true) {
+                    val data = response.body()!!.data
+                    _tripState.value = TripState.Success(
+                        driver = data?.driver,
+                        tripId = data?.tripId ?: ""
+                    )
+                } else {
+                    val msg = response.body()?.message ?: "Error al confirmar el viaje"
+                    _tripState.value = TripState.Error(msg)
+                }
+            } catch (e: Exception) {
+                Log.e("TaxiViewModel", "confirmTrip error: ${e.message}", e)
+                _tripState.value = TripState.Error("Error de red: ${e.message}")
+            }
+        }
+    }
+
+    fun resetTrip() {
+        _tripState.value = TripState.Idle
+        _uiState.value = TaxiUiState()
     }
 }

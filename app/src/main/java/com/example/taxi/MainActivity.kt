@@ -94,7 +94,11 @@ fun TaxiNavGraph() {
 
         // ── Mapa de viaje ─────────────────────────────────────────────────────
         composable("client_search") {
-            ClientSearchScreen(viewModel = taxiViewModel)
+            val loggedUser by authViewModel.loggedUser.collectAsState()
+            ClientSearchScreen(
+                viewModel = taxiViewModel,
+                clientId = loggedUser?.id ?: ""
+            )
         }
 
         // ── Pantalla del conductor ─────────────────────────────────────────────
