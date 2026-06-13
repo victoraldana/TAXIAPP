@@ -398,6 +398,18 @@ private fun IdlePanel(isOnline: Boolean, queuePos: Int?, onToggle: () -> Unit) {
                             fontSize = 12.sp, color = DrvSub)
                     }
                 }
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = onToggle,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    border = BorderStroke(1.dp, DrvRed.copy(alpha = 0.4f))
+                ) {
+                    Icon(Icons.Filled.Logout, null, tint = DrvRed, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Tengo Viaje Externo (Salir de Cola)", color = DrvRed, fontWeight = FontWeight.Bold)
+                }
             }
 
             CircularProgressIndicator(
