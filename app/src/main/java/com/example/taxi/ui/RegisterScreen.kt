@@ -56,7 +56,7 @@ enum class RegStep {
 fun RegisterScreen(
     viewModel: AuthViewModel,
     selectedRole: UserRole,
-    onRegistrationComplete: () -> Unit,
+    onRegistrationComplete: (AuthModels.UserData, AuthModels.TokenData) -> Unit,
     onBack: () -> Unit
 ) {
     var step by remember { mutableStateOf(RegStep.PHONE_INPUT) }
@@ -76,8 +76,10 @@ fun RegisterScreen(
     // Escuchar registro exitoso
     LaunchedEffect(authState) {
         if (authState is AuthModels.AuthResult.Success) {
+            val user = (authState as AuthModels.AuthResult.Success).user
+            val tokens = (authState as AuthModels.AuthResult.Success).tokens
             viewModel.clearAuthState()
-            onRegistrationComplete()
+            onRegistrationComplete(user, tokens)
         }
     }
 

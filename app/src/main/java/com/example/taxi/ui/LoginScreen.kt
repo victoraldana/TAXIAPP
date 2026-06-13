@@ -45,7 +45,7 @@ private val TaxiError      = Color(0xFFFF6B6B)
 // ─── Pantalla de Login ────────────────────────────────────────────────────────
 @Composable
 fun LoginScreen(
-    onLoginSuccess: (userRole: String) -> Unit,
+    onLoginSuccess: (AuthModels.UserData, AuthModels.TokenData) -> Unit,
     onGoToRegister: () -> Unit,
     viewModel: AuthViewModel
 ) {
@@ -61,7 +61,8 @@ fun LoginScreen(
     LaunchedEffect(authState) {
         if (authState is AuthModels.AuthResult.Success) {
             val user = (authState as AuthModels.AuthResult.Success).user
-            onLoginSuccess(user.role)
+            val tokens = (authState as AuthModels.AuthResult.Success).tokens
+            onLoginSuccess(user, tokens)
             viewModel.clearAuthState()
         }
     }

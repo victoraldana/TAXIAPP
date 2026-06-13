@@ -36,6 +36,10 @@ class AuthViewModel : ViewModel() {
     private val _loggedUser = MutableStateFlow<AuthModels.UserData?>(null)
     val loggedUser: StateFlow<AuthModels.UserData?> = _loggedUser.asStateFlow()
 
+    fun setLoggedUser(user: AuthModels.UserData?) {
+        _loggedUser.value = user
+    }
+
     fun clearAuthState() {
         _authState.value = null
     }

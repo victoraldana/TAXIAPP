@@ -23,6 +23,8 @@ import com.example.taxi.viewmodel.AuthViewModel
 import com.example.taxi.viewmodel.DriverViewModel
 import com.example.taxi.viewmodel.TaxiViewModel
 import com.google.android.libraries.places.api.Places
+import androidx.compose.ui.platform.LocalContext
+import com.example.taxi.utils.SessionManager
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,19 +45,35 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun TaxiNavGraph() {
+    val context = LocalContext.current
+    val sessionManager = remember { SessionManager(context) }
+    
     val navController: NavHostController = rememberNavController()
     val taxiViewModel: TaxiViewModel     = viewModel()
     val authViewModel: AuthViewModel     = viewModel()
     val driverViewModel: DriverViewModel = viewModel()
 
-    NavHost(navController = navController, startDestination = "login") {
+    // Cargar sesión
+    val startDest = remember {
+        val user = sessionManager.getUser()
+        if (user != null) {
+            authViewModel.setLoggedUser(user)
+            if (user.role == "driver") "driver_home" else "home"
+        } else {
+            "login"
+        }
+    }
+
+    NavHost(navController = navController, startDestination = startDest) {
 
         // ── Login ─────────────────────────────────────────────────────────────
         composable("login") {
             LoginScreen(
                 viewModel = authViewModel,
-                onLoginSuccess = { role ->
-                    val dest = if (role == "driver") "driver_home" else "home"
+                onLoginSuccess = { user, tokens ->
+                    sessionManager.saveSession(user, tokens)
+                    authViewModel.setLoggedUser(user)
+                    val dest = if (user.role == "driver") "driver_home" else "home"
                     navController.navigate(dest) {
                         popUpTo("login") { inclusive = true }
                     }
@@ -71,7 +89,9 @@ fun TaxiNavGraph() {
             RegisterScreen(
                 viewModel = authViewModel,
                 selectedRole = UserRole.CLIENT,
-                onRegistrationComplete = {
+                onRegistrationComplete = { user, tokens ->
+                    sessionManager.saveSession(user, tokens)
+                    authViewModel.setLoggedUser(user)
                     navController.navigate("home") {
                         popUpTo("login") { inclusive = true }
                     }
@@ -116,6 +136,7 @@ fun TaxiNavGraph() {
                     driver = user,
                     viewModel = driverViewModel,
                     onLogout = {
+                        sessionManager.clearSession()
                         authViewModel.logout()
                         navController.navigate("login") {
                             popUpTo(0) { inclusive = true }
