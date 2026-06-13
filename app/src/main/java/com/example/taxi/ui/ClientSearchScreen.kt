@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
@@ -561,6 +562,7 @@ private fun BottomSheetContent(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val destFocusRequester = remember { FocusRequester() }
+    var focusedField by remember { mutableStateOf<MapSelectionMode?>(null) }
 
     if (tripState is TripState.Success) {
         val d = tripState.driver
@@ -632,6 +634,22 @@ private fun BottomSheetContent(
             color = MapText
         )
 
+        AnimatedVisibility(visible = focusedField != null) {
+            TextButton(
+                onClick = { 
+                    focusedField?.let { onSelectOnMap(it) }
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.textButtonColors(contentColor = MapBlue)
+            ) {
+                Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Seleccionar en el mapa", fontWeight = FontWeight.Bold)
+            }
+        }
+
         // ── Campo Origen ──────────────────────────────────────────────────────
         Column {
             MapSearchField(
@@ -639,6 +657,7 @@ private fun BottomSheetContent(
                 onValueChange = onPickupQueryChange,
                 placeholder = "Punto de partida",
                 leadingDot = MapGreen,
+                modifier = Modifier.onFocusChanged { if (it.isFocused) focusedField = MapSelectionMode.ORIGIN },
                 trailingContent = {
                     IconButton(
                         onClick = onUseMyLocation,
@@ -654,30 +673,15 @@ private fun BottomSheetContent(
                 }
             )
             AnimatedVisibility(visible = uiState.pickupSearchQuery.isNotEmpty()) {
-                Column {
-                    TextButton(
-                        onClick = { 
-                            onSelectOnMap(MapSelectionMode.ORIGIN) 
-                            focusManager.clearFocus()
-                            keyboardController?.hide()
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                        colors = ButtonDefaults.textButtonColors(contentColor = MapBlue)
-                    ) {
-                        Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Seleccionar origen en el mapa")
-                    }
-                    if (uiState.pickupPredictions.isNotEmpty()) {
-                        PredictionsList(
-                            predictions = uiState.pickupPredictions,
-                            dotColor = MapGreen,
-                            onSelect = {
-                                onPickupPredictionSelect(it)
-                                destFocusRequester.requestFocus()
-                            }
-                        )
-                    }
+                if (uiState.pickupPredictions.isNotEmpty()) {
+                    PredictionsList(
+                        predictions = uiState.pickupPredictions,
+                        dotColor = MapGreen,
+                        onSelect = {
+                            onPickupPredictionSelect(it)
+                            destFocusRequester.requestFocus()
+                        }
+                    )
                 }
             }
         }
@@ -707,34 +711,21 @@ private fun BottomSheetContent(
                 onValueChange = onDestinationQueryChange,
                 placeholder = "¿A dónde vas?",
                 leadingDot = MapRed,
-                modifier = Modifier.focusRequester(destFocusRequester)
+                modifier = Modifier
+                    .focusRequester(destFocusRequester)
+                    .onFocusChanged { if (it.isFocused) focusedField = MapSelectionMode.DESTINATION }
             )
             AnimatedVisibility(visible = uiState.destinationSearchQuery.isNotEmpty()) {
-                Column {
-                    TextButton(
-                        onClick = { 
-                            onSelectOnMap(MapSelectionMode.DESTINATION)
+                if (uiState.destinationPredictions.isNotEmpty()) {
+                    PredictionsList(
+                        predictions = uiState.destinationPredictions,
+                        dotColor = MapRed,
+                        onSelect = {
+                            onDestinationPredictionSelect(it)
                             focusManager.clearFocus()
                             keyboardController?.hide()
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                        colors = ButtonDefaults.textButtonColors(contentColor = MapRed)
-                    ) {
-                        Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Seleccionar destino en el mapa")
-                    }
-                    if (uiState.destinationPredictions.isNotEmpty()) {
-                        PredictionsList(
-                            predictions = uiState.destinationPredictions,
-                            dotColor = MapRed,
-                            onSelect = {
-                                onDestinationPredictionSelect(it)
-                                focusManager.clearFocus()
-                                keyboardController?.hide()
-                            }
-                        )
-                    }
+                        }
+                    )
                 }
             }
         }
