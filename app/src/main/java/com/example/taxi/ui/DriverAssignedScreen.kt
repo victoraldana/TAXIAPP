@@ -240,21 +240,34 @@ fun DriverAssignedScreen(
                                 .clip(CircleShape)
                                 .background(AssignYellow.copy(alpha = 0.15f))
                         )
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    Brush.radialGradient(listOf(AssignYellow, Color(0xFFE6A800)))
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = driver.fullName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF0D0D0D)
+                        
+                        if (!driver.avatarUrl.isNullOrEmpty()) {
+                            AsyncImage(
+                                model = driver.avatarUrl,
+                                contentDescription = "Foto del conductor",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clip(CircleShape)
+                                    .border(2.dp, AssignYellow, CircleShape)
                             )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        Brush.radialGradient(listOf(AssignYellow, Color(0xFFE6A800)))
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = driver.fullName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF0D0D0D)
+                                )
+                            }
                         }
                     }
 

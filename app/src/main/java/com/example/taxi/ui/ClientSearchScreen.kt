@@ -47,6 +47,7 @@ import com.example.taxi.viewmodel.TripState
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import com.google.android.gms.maps.model.BitmapDescriptor
@@ -489,6 +490,8 @@ private fun BottomSheetContent(
     onConfirm: () -> Unit,
     onCancelTrip: () -> Unit
 ) {
+    val context = LocalContext.current
+
     if (tripState is TripState.Success) {
         val d = tripState.driver
         if (d != null) {
@@ -512,7 +515,10 @@ private fun BottomSheetContent(
                 originAddress = uiState.pickupPoint?.address ?: "",
                 destAddress = uiState.destinationPoint?.address ?: "",
                 onCancel = onCancelTrip,
-                onContact = { /* TODO: Llamar */ },
+                onContact = {
+                    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${d.phone}"))
+                    context.startActivity(intent)
+                },
                 isBottomSheet = true
             )
             return
