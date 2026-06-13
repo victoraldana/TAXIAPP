@@ -505,6 +505,7 @@ private fun BottomSheetContent(
                     vehiclePlate = d.vehiclePlate,
                     vehicleColor = d.vehicleColor ?: "gris",
                     vehicleType = d.vehicleType ?: "sedan",
+                    vehiclePhotoUrl = d.vehiclePhotoUrl,
                     rating = d.rating,
                     totalTrips = d.totalTrips
                 ),

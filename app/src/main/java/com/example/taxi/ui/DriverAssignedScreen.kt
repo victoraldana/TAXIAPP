@@ -21,6 +21,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
+import coil.compose.AsyncImage
 import kotlin.math.*
 
 // ─── Paleta ──────────────────────────────────────────────────────────────────
@@ -44,6 +45,7 @@ data class AssignedDriverInfo(
     val vehiclePlate: String,
     val vehicleColor: String,
     val vehicleType: String,
+    val vehiclePhotoUrl: String?,
     val rating: Float,
     val totalTrips: Int
 )
@@ -158,20 +160,32 @@ fun DriverAssignedScreen(
 
                         Spacer(Modifier.height(16.dp))
 
-                        // 3D Vehicle Canvas
+                        // 3D Vehicle Canvas o Foto Real
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(180.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Vehicle3DView(
-                                vehicleType = driver.vehicleType,
-                                color = driver.vehicleColor,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(180.dp)
-                            )
+                            if (!driver.vehiclePhotoUrl.isNullOrEmpty()) {
+                                AsyncImage(
+                                    model = driver.vehiclePhotoUrl,
+                                    contentDescription = "Foto del Vehículo",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(180.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                )
+                            } else {
+                                Vehicle3DView(
+                                    vehicleType = driver.vehicleType,
+                                    color = driver.vehicleColor,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(180.dp)
+                                )
+                            }
                         }
 
                         Spacer(Modifier.height(12.dp))

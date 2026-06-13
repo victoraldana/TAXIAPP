@@ -133,6 +133,7 @@ function renderDrivers(data) {
             ? `<button class="btn-icon danger" title="Quitar de cola" onclick="removeFromQueue('${d.id}')">✕ Cola</button>`
             : `<button class="btn-icon success" title="Agregar a cola" onclick="quickAddToQueue('${d.id}','${d.full_name}')">+ Cola</button>`}
           <button class="btn-icon" title="Activar/Desactivar" onclick="toggleDriver('${d.id}',${!d.is_active})">${d.is_active?'⏸':'▶'}</button>
+          <button class="btn-icon" title="Editar" onclick="editDriver('${d.id}')">✏️</button>
         </div>
       </td>
     </tr>`).join('');
@@ -173,27 +174,68 @@ async function removeFromQueue(driverId) {
   } catch (e) { toast(e.message, 'error'); }
 }
 
-// ─── REGISTRAR CONDUCTOR ──────────────────────────────────────────────────────
+// ─── REGISTRAR / EDITAR CONDUCTOR ─────────────────────────────────────────────
+function openNewDriverModal() {
+  document.getElementById('driverForm').reset();
+  document.getElementById('driver_id_input').value = '';
+  document.getElementById('submitDriverBtn').textContent = 'Registrar conductor';
+  document.querySelector('#modalDriver h2').textContent = 'Registrar Conductor';
+  openModal('modalDriver');
+}
+
+function editDriver(id) {
+  const d = allDrivers.find(x => x.id === id);
+  if (!d) return;
+  document.getElementById('driverForm').reset();
+  const form = document.getElementById('driverForm');
+  
+  form.elements['driver_id'].value = d.id;
+  form.elements['full_name'].value = d.full_name || '';
+  form.elements['phone'].value = d.phone || '';
+  form.elements['email'].value = d.email || '';
+  form.elements['avatar_url'].value = d.avatar_url || '';
+  form.elements['unit_number'].value = d.unit_number || '';
+  form.elements['vehicle_plate'].value = d.vehicle_plate || '';
+  form.elements['vehicle_make'].value = d.vehicle_make || '';
+  form.elements['vehicle_model'].value = d.vehicle_model || '';
+  form.elements['vehicle_year'].value = d.vehicle_year || '';
+  form.elements['vehicle_color'].value = d.vehicle_color || '';
+  form.elements['vehicle_type'].value = d.vehicle_type || 'sedan';
+  form.elements['license_number'].value = d.license_number || '';
+  form.elements['vehicle_photo_url'].value = d.vehicle_photo_url || '';
+
+  document.getElementById('submitDriverBtn').textContent = 'Guardar cambios';
+  document.querySelector('#modalDriver h2').textContent = 'Editar Conductor';
+  openModal('modalDriver');
+}
 async function submitDriver(e) {
   e.preventDefault();
   const btn = document.getElementById('submitDriverBtn');
-  btn.textContent = 'Registrando...';
+  btn.textContent = 'Guardando...';
   btn.disabled = true;
 
   const fd = new FormData(e.target);
   const body = Object.fromEntries([...fd.entries()].filter(([,v]) => v));
   if (body.vehicle_year) body.vehicle_year = parseInt(body.vehicle_year);
+  
+  const driverId = body.driver_id;
+  delete body.driver_id;
 
   try {
-    const { data } = await api('/drivers', { method: 'POST', body: JSON.stringify(body) });
-    toast(`Conductor ${data.full_name} registrado exitosamente`);
+    if (driverId) {
+      await api(`/drivers/${driverId}`, { method: 'PATCH', body: JSON.stringify(body) });
+      toast('Conductor actualizado exitosamente');
+    } else {
+      const { data } = await api('/drivers', { method: 'POST', body: JSON.stringify(body) });
+      toast(`Conductor ${data.full_name} registrado exitosamente`);
+    }
     closeModal('modalDriver');
     e.target.reset();
     loadDrivers();
   } catch (err) {
     toast(err.message, 'error');
   } finally {
-    btn.textContent = 'Registrar conductor';
+    btn.textContent = driverId ? 'Guardar cambios' : 'Registrar conductor';
     btn.disabled = false;
   }
 }

@@ -39,7 +39,7 @@ export const listDrivers = async (_req, res) => {
       SELECT u.id, u.full_name, u.phone, u.email, u.avatar_url,
              u.is_active, u.is_verified, u.created_at,
              dp.unit_number, dp.vehicle_make, dp.vehicle_model, dp.vehicle_year,
-             dp.vehicle_plate, dp.vehicle_color, dp.vehicle_type,
+             dp.vehicle_plate, dp.vehicle_color, dp.vehicle_type, dp.vehicle_photo_url,
              dp.license_number, dp.is_available, dp.is_approved,
              dp.rating, dp.total_trips,
              CASE WHEN dq.id IS NOT NULL AND dq.is_active THEN TRUE ELSE FALSE END AS in_queue,
@@ -131,7 +131,7 @@ export const registerDriver = async (req, res) => {
 export const updateDriver = async (req, res) => {
   const { id } = req.params;
   const { is_active, is_approved, is_available, avatar_url,
-          vehicle_make, vehicle_model, vehicle_color, unit_number } = req.body;
+          vehicle_make, vehicle_model, vehicle_color, unit_number, vehicle_photo_url } = req.body;
 
   try {
     if (is_active !== undefined)
@@ -145,9 +145,10 @@ export const updateDriver = async (req, res) => {
            vehicle_model=COALESCE($4,vehicle_model),
            vehicle_color=COALESCE($5,vehicle_color),
            unit_number=COALESCE($6,unit_number),
+           vehicle_photo_url=COALESCE($7,vehicle_photo_url),
            updated_at=NOW()
-       WHERE user_id=$7`,
-      [is_approved, is_available, vehicle_make, vehicle_model, vehicle_color, unit_number, id]
+       WHERE user_id=$8`,
+      [is_approved, is_available, vehicle_make, vehicle_model, vehicle_color, unit_number, vehicle_photo_url, id]
     );
 
     if (avatar_url)
@@ -359,7 +360,7 @@ export const assignNextDriver = async (req, res) => {
     const driverData = await query(`
       SELECT u.id, u.full_name, u.phone, u.avatar_url,
              dp.unit_number, dp.vehicle_make, dp.vehicle_model,
-             dp.vehicle_year, dp.vehicle_plate, dp.vehicle_color, dp.vehicle_type,
+             dp.vehicle_year, dp.vehicle_plate, dp.vehicle_color, dp.vehicle_type, dp.vehicle_photo_url,
              dp.rating, dp.total_trips
       FROM users u
       JOIN driver_profiles dp ON dp.user_id = u.id
@@ -425,7 +426,7 @@ export const createTrip = async (req, res) => {
       const dr = await query(`
         SELECT u.id, u.full_name, u.phone, u.avatar_url,
                dp.unit_number, dp.vehicle_make, dp.vehicle_model,
-               dp.vehicle_year, dp.vehicle_plate, dp.vehicle_color, dp.vehicle_type,
+               dp.vehicle_year, dp.vehicle_plate, dp.vehicle_color, dp.vehicle_type, dp.vehicle_photo_url,
                dp.rating, dp.total_trips
         FROM users u JOIN driver_profiles dp ON dp.user_id = u.id WHERE u.id=$1
       `, [driver_id]);

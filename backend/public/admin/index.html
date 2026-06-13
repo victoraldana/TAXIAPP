@@ -59,7 +59,7 @@
   <section class="view" id="view-drivers">
     <div class="view-header">
       <h2>Conductores</h2>
-      <button class="btn-primary" onclick="openModal('modalDriver')">+ Registrar conductor</button>
+      <button class="btn-primary" onclick="openNewDriverModal()">+ Registrar conductor</button>
     </div>
     <div class="search-bar">
       <input type="text" id="searchDriver" placeholder="Buscar por nombre, teléfono, placa..." oninput="filterDrivers()">
@@ -142,8 +142,10 @@
             </select>
           </div>
           <div class="form-group"><label>N° Licencia</label><input type="text" name="license_number" class="input-field" placeholder="LIC-00000"></div>
+          <div class="form-group full"><label>URL Foto de Vehículo</label><input type="url" name="vehicle_photo_url" class="input-field" placeholder="https://..."></div>
         </div>
       </div>
+      <input type="hidden" name="driver_id" id="driver_id_input">
       <div class="modal-footer">
         <button type="button" class="btn-secondary" onclick="closeModal('modalDriver')">Cancelar</button>
         <button type="submit" class="btn-primary" id="submitDriverBtn">Registrar conductor</button>

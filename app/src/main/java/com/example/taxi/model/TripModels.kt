@@ -40,6 +40,7 @@ data class DriverData(
     @SerializedName("vehicle_plate")  val vehiclePlate: String,
     @SerializedName("vehicle_color")  val vehicleColor: String? = null,
     @SerializedName("vehicle_type")   val vehicleType: String? = null,
+    @SerializedName("vehicle_photo_url") val vehiclePhotoUrl: String? = null,
     val rating: Float = 5.0f,
     @SerializedName("total_trips")    val totalTrips: Int = 0,
 )
