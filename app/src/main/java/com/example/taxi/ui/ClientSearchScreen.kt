@@ -44,6 +44,7 @@ import android.widget.Toast
 import com.example.taxi.ui.AssignedDriverInfo
 import com.example.taxi.ui.DriverAssignedScreen
 import com.example.taxi.viewmodel.TripState
+import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
 import android.graphics.Bitmap
@@ -71,6 +72,16 @@ fun playNotificationSound(context: android.content.Context) {
         val uri: Uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
         val ringtone = RingtoneManager.getRingtone(context, uri)
         ringtone.play()
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+}
+
+fun playClaxonSound(context: android.content.Context) {
+    try {
+        val mp = MediaPlayer.create(context, R.raw.claxon)
+        mp.setOnCompletionListener { it.release() }
+        mp.start()
     } catch (e: Exception) {
         e.printStackTrace()
     }
@@ -123,6 +134,7 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
     // ── Errores y sin conductor disponible ────────────────────────────────────
     var hasAnnouncedArrival by remember { mutableStateOf(false) }
     var hasAnnouncedAssigned by remember { mutableStateOf(false) }
+    var showArrivalDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(tripState) {
         when (val state = tripState) {
@@ -136,8 +148,8 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
                         hasAnnouncedAssigned = true
                     }
                     if (state.hasArrived && !hasAnnouncedArrival) {
-                        playNotificationSound(context)
-                        Toast.makeText(context, "¡Tu taxi ha llegado!", Toast.LENGTH_LONG).show()
+                        playClaxonSound(context)
+                        showArrivalDialog = true
                         hasAnnouncedArrival = true
                     }
                 }
@@ -149,6 +161,7 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
             is TripState.Idle -> {
                 hasAnnouncedArrival = false
                 hasAnnouncedAssigned = false
+                showArrivalDialog = false
             }
             else -> {}
         }
@@ -161,13 +174,30 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
         if (drvLoc != null && pkp != null && tripState is TripState.Success && !hasAnnouncedArrival) {
             val dist = distanceBetween(drvLoc!!.latitude, drvLoc!!.longitude, pkp.latitude, pkp.longitude)
             if (dist < 50f) { // Menos de 50 metros
-                playNotificationSound(context) // Simula el claxon
-                Toast.makeText(context, "¡Tu taxi ha llegado!", Toast.LENGTH_LONG).show()
+                playClaxonSound(context) // Claxon local
+                showArrivalDialog = true
                 hasAnnouncedArrival = true
             }
         }
     }
-    
+
+    if (showArrivalDialog) {
+        AlertDialog(
+            onDismissRequest = { showArrivalDialog = false },
+            title = { Text("¡Tu taxi ha llegado!", fontWeight = FontWeight.ExtraBold) },
+            text = { Text("El conductor ya se encuentra en el punto de encuentro. Por favor, acércate al vehículo.") },
+            confirmButton = {
+                TextButton(onClick = { showArrivalDialog = false }) {
+                    Text("Aceptar", fontWeight = FontWeight.Bold)
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MapCard,
+            titleContentColor = MapText,
+            textContentColor = MapSubText
+        )
+    }
+
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     // Inicializar Places
