@@ -97,13 +97,18 @@ fun bitmapDescriptorFromVector(context: android.content.Context, vectorResId: In
     }
 }
 
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
+
 fun distanceBetween(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Float {
     val results = FloatArray(1)
     android.location.Location.distanceBetween(lat1, lng1, lat2, lng2, results)
     return results[0]
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @SuppressLint("MissingPermission")
 @Composable
 fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinished: () -> Unit = {}) {
@@ -265,9 +270,12 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
     val hasPickup = uiState.pickupPoint != null
     val isTripActive = tripState is TripState.Success && (tripState as TripState.Success).driver != null
 
+    val isImeVisible = WindowInsets.isImeVisible
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+
     BottomSheetScaffold(
         scaffoldState = sheetState,
-        sheetPeekHeight = if (isTripActive) 450.dp else if (hasRoute) 260.dp else 200.dp,
+        sheetPeekHeight = if (isImeVisible) screenHeight else if (isTripActive) 450.dp else if (hasRoute) 260.dp else 200.dp,
         sheetDragHandle = {
             Box(
                 modifier = Modifier
