@@ -25,10 +25,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
@@ -503,6 +507,9 @@ private fun BottomSheetContent(
     onCancelTrip: () -> Unit
 ) {
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val destFocusRequester = remember { FocusRequester() }
 
     if (tripState is TripState.Success) {
         val d = tripState.driver
@@ -599,7 +606,10 @@ private fun BottomSheetContent(
                 PredictionsList(
                     predictions = uiState.pickupPredictions,
                     dotColor = MapGreen,
-                    onSelect = onPickupPredictionSelect
+                    onSelect = {
+                        onPickupPredictionSelect(it)
+                        destFocusRequester.requestFocus()
+                    }
                 )
             }
         }
@@ -628,13 +638,18 @@ private fun BottomSheetContent(
                 value = uiState.destinationSearchQuery,
                 onValueChange = onDestinationQueryChange,
                 placeholder = "¿A dónde vas?",
-                leadingDot = MapRed
+                leadingDot = MapRed,
+                modifier = Modifier.focusRequester(destFocusRequester)
             )
             AnimatedVisibility(visible = uiState.destinationPredictions.isNotEmpty()) {
                 PredictionsList(
                     predictions = uiState.destinationPredictions,
                     dotColor = MapRed,
-                    onSelect = onDestinationPredictionSelect
+                    onSelect = {
+                        onDestinationPredictionSelect(it)
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                    }
                 )
             }
         }
@@ -792,6 +807,7 @@ private fun MapSearchField(
     onValueChange: (String) -> Unit,
     placeholder: String,
     leadingDot: Color,
+    modifier: Modifier = Modifier,
     trailingContent: (@Composable () -> Unit)? = null
 ) {
     OutlinedTextField(
@@ -810,7 +826,7 @@ private fun MapSearchField(
         },
         trailingIcon = trailingContent,
         singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = leadingDot.copy(alpha = 0.7f),
