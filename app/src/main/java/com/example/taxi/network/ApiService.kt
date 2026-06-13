@@ -140,7 +140,7 @@ interface ApiService {
     @GET("api/admin/trips/client/{clientId}/active")
     suspend fun getActiveTripForClient(
         @Path("clientId") clientId: String
-    ): Response<com.example.taxi.model.TripResponse>
+    ): Response<PendingTripResponse>
 
     @GET("api/admin/trips/client/{clientId}")
     suspend fun getClientTrips(

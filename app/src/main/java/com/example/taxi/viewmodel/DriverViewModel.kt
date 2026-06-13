@@ -283,13 +283,12 @@ class DriverViewModel : ViewModel() {
                                         originAddress = trip.originAddress,
                                         destAddress   = trip.destAddress,
                                         distanceKm    = trip.distanceKm,
-                                        estimatedFare = trip.estimatedFare,
                                         paymentMethod = trip.paymentMethod,
                                         originLat     = trip.originLat,
                                         originLng     = trip.originLng,
                                         destLat       = trip.destLat,
                                         destLng       = trip.destLng,
-                                        status        = trip.status
+                                        hasArrived    = trip.status == "arrived" || trip.status == "in_progress"
                                     )
                                 }
                                 // Pre-calcular también la ruta origen→destino

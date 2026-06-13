@@ -11,6 +11,7 @@ import com.example.taxi.model.UserRole
 import com.example.taxi.model.toPlacePrediction
 import com.example.taxi.model.DirectionsService
 import com.example.taxi.model.decodePolyline
+import com.example.taxi.model.PendingTripResponse
 import com.example.taxi.BuildConfig
 import com.example.taxi.network.RetrofitClient
 import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRequest
@@ -101,7 +102,7 @@ class TaxiViewModel : ViewModel() {
                             tripId = trip.tripId,
                             hasArrived = trip.status == "arrived"
                         )
-                        startPollingTripStatus(trip.tripId)
+                        startPollingTripStatus(trip.tripId, null)
                     }
                 }
             } catch (e: Exception) {
