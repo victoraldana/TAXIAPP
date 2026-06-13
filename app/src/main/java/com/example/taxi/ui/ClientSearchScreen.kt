@@ -549,8 +549,10 @@ private fun BottomSheetContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .imePadding()
             .padding(horizontal = 20.dp)
-            .padding(bottom = 24.dp),
+            .padding(bottom = 24.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Título
@@ -829,8 +831,8 @@ private fun PredictionsList(
         colors = CardDefaults.cardColors(containerColor = MapCardLight),
         border = BorderStroke(1.dp, MapBorder)
     ) {
-        LazyColumn(modifier = Modifier.heightIn(max = 220.dp)) {
-            items(predictions) { prediction ->
+        Column(modifier = Modifier.heightIn(max = 220.dp)) {
+            predictions.forEach { prediction ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
