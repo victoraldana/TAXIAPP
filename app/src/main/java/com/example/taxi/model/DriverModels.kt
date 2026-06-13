@@ -18,7 +18,7 @@ data class DriverQueueData(
 data class QueueAddResponse(
     val success: Boolean,
     val message: String,
-    val data: DriverQueueData? = null
+    val position: Int? = null
 )
 
 // ─── Respuesta de viaje pendiente para conductor ──────────────────────────────

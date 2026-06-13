@@ -109,7 +109,7 @@ class DriverViewModel : ViewModel() {
                     val res = RetrofitClient.apiService.addDriverToQueue(driverId)
                     if (res.isSuccessful) {
                         _isOnline.value = true
-                        _queuePosition.value = res.body()?.data?.queuePosition
+                        _queuePosition.value = res.body()?.position
                     }
                 } catch (e: Exception) {
                     Log.e("DriverViewModel", "addToQueue error: ${e.message}")
@@ -162,7 +162,10 @@ class DriverViewModel : ViewModel() {
             try {
                 RetrofitClient.apiService.rejectTrip(tripId)
                 // Volver a ponerse al final de la cola
-                RetrofitClient.apiService.addDriverToQueue(driverId)
+                val res = RetrofitClient.apiService.addDriverToQueue(driverId)
+                if (res.isSuccessful) {
+                    _queuePosition.value = res.body()?.position
+                }
             } catch (e: Exception) {
                 Log.e("DriverViewModel", "rejectTrip error: ${e.message}")
             }
@@ -190,9 +193,10 @@ class DriverViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 RetrofitClient.apiService.finishTrip(tripId)
-                RetrofitClient.apiService.addDriverToQueue(driverId)
-                val res = RetrofitClient.apiService.getDriverQueueStatus(driverId)
-                _queuePosition.value = res.body()?.data?.queuePosition
+                val res = RetrofitClient.apiService.addDriverToQueue(driverId)
+                if (res.isSuccessful) {
+                    _queuePosition.value = res.body()?.position
+                }
             } catch (e: Exception) {
                 Log.e("DriverViewModel", "finishTrip error: ${e.message}")
             }
