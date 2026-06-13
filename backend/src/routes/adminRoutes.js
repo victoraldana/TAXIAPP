@@ -23,8 +23,8 @@ router.get('/drivers/:id/pending-trip',       getPendingTrip);         // app co
 
 // Cola de turnos
 router.get('/queue',                          getQueue);
-router.post('/queue/:driverId',               addToQueue);             // app conductor (POST /queue/:id)
-router.delete('/queue/:driverId',             removeFromQueue);        // app conductor
+router.post('/queue/:driver_id',              addToQueue);             // app conductor
+router.delete('/queue/:driver_id',            removeFromQueue);        // app conductor
 router.post('/queue/add/:driver_id',          addToQueue);             // admin panel
 router.delete('/queue/remove/:driver_id',     removeFromQueue);        // admin panel
 router.patch('/queue/:queue_id/move',         moveInQueue);
