@@ -34,6 +34,8 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
 import com.example.taxi.viewmodel.DriverViewModel
 import com.example.taxi.viewmodel.DriverTripState
+import android.media.RingtoneManager
+import android.net.Uri
 
 // ─── Paleta ──────────────────────────────────────────────────────────────────
 private val DrvDark    = Color(0xFF0A1628)
@@ -47,6 +49,16 @@ private val DrvGreen   = Color(0xFF00C853)
 private val DrvRed     = Color(0xFFFF5252)
 private val DrvBlue    = Color(0xFF4FC3F7)
 
+fun playDriverNotificationSound(context: android.content.Context) {
+    try {
+        val uri: Uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        val ringtone = RingtoneManager.getRingtone(context, uri)
+        ringtone.play()
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
 @Composable
@@ -58,6 +70,13 @@ fun DriverHomeScreen(
     val context    = LocalContext.current
     val tripState  by viewModel.tripState.collectAsState()
     val isOnline   by viewModel.isOnline.collectAsState()
+    
+    // Play sound when trip is assigned
+    LaunchedEffect(tripState) {
+        if (tripState is DriverTripState.TripAssigned) {
+            playDriverNotificationSound(context)
+        }
+    }
     val queuePos   by viewModel.queuePosition.collectAsState()
 
     val fusedClient = remember { LocationServices.getFusedLocationProviderClient(context) }

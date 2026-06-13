@@ -44,6 +44,13 @@ import android.widget.Toast
 import com.example.taxi.ui.AssignedDriverInfo
 import com.example.taxi.ui.DriverAssignedScreen
 import com.example.taxi.viewmodel.TripState
+import android.media.RingtoneManager
+import android.net.Uri
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import com.google.android.gms.maps.model.BitmapDescriptor
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.example.taxi.R
 
 // ─── Paleta ──────────────────────────────────────────────────────────────────
 private val MapDark      = Color(0xFF0F1923)
@@ -57,6 +64,32 @@ private val MapYellowDk  = Color(0xFFE6A800)
 private val MapGreen     = Color(0xFF4CAF50)
 private val MapRed       = Color(0xFFEF5350)
 private val MapBlue      = Color(0xFF4FC3F7)
+
+// ─── Funciones de Sonido y Marcador ──────────────────────────────────────────
+fun playNotificationSound(context: android.content.Context) {
+    try {
+        val uri: Uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        val ringtone = RingtoneManager.getRingtone(context, uri)
+        ringtone.play()
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+}
+
+fun bitmapDescriptorFromVector(context: android.content.Context, vectorResId: Int): BitmapDescriptor? {
+    return ContextCompat.getDrawable(context, vectorResId)?.run {
+        setBounds(0, 0, intrinsicWidth, intrinsicHeight)
+        val bitmap = Bitmap.createBitmap(intrinsicWidth, intrinsicHeight, Bitmap.Config.ARGB_8888)
+        draw(Canvas(bitmap))
+        BitmapDescriptorFactory.fromBitmap(bitmap)
+    }
+}
+
+fun distanceBetween(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Float {
+    val results = FloatArray(1)
+    android.location.Location.distanceBetween(lat1, lng1, lat2, lng2, results)
+    return results[0]
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
@@ -88,12 +121,18 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
     }
 
     // ── Errores y sin conductor disponible ────────────────────────────────────
+    var hasAnnouncedArrival by remember { mutableStateOf(false) }
+
     LaunchedEffect(tripState) {
         when (val state = tripState) {
             is TripState.Success -> {
                 if (state.driver == null) {
                     Toast.makeText(context, "Buscando conductor...", Toast.LENGTH_SHORT).show()
                     viewModel.resetTrip()
+                } else {
+                    // Viaje asignado al cliente, reproducir sonido
+                    playNotificationSound(context)
+                    hasAnnouncedArrival = false
                 }
             }
             is TripState.Error -> {
@@ -101,6 +140,20 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
                 viewModel.resetTrip()
             }
             else -> {}
+        }
+    }
+    
+    // ── Detectar si el taxi llegó al origen ──────────────────────────────────
+    val drvLoc by viewModel.driverLocation.collectAsState()
+    val pkp = uiState.pickupPoint
+    LaunchedEffect(drvLoc) {
+        if (drvLoc != null && pkp != null && tripState is TripState.Success && !hasAnnouncedArrival) {
+            val dist = distanceBetween(drvLoc!!.latitude, drvLoc!!.longitude, pkp.latitude, pkp.longitude)
+            if (dist < 50f) { // Menos de 50 metros
+                playNotificationSound(context) // Simula el claxon
+                Toast.makeText(context, "¡Tu taxi ha llegado!", Toast.LENGTH_LONG).show()
+                hasAnnouncedArrival = true
+            }
         }
     }
     
@@ -273,12 +326,11 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
                 // ── Marcador del taxi en tiempo real ──
                 val drvLoc by viewModel.driverLocation.collectAsState()
                 drvLoc?.let { loc ->
+                    val carIcon = bitmapDescriptorFromVector(context, R.drawable.ic_car_white)
                     Marker(
                         state = MarkerState(loc),
                         title = "Tu Taxi",
-                        icon = com.google.android.gms.maps.model.BitmapDescriptorFactory.defaultMarker(
-                            com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_YELLOW
-                        )
+                        icon = carIcon ?: BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW)
                     )
                     // Update camera to follow taxi slightly
                     LaunchedEffect(loc) {
