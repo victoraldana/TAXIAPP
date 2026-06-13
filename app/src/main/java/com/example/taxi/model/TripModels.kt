@@ -80,3 +80,23 @@ data class RatingResponse(
     val message: String
 )
 
+// ─── Historial de Viajes ──────────────────────────────────────────────────────
+data class TripHistoryResponse(
+    val success: Boolean,
+    val data: List<TripHistoryItem> = emptyList()
+)
+
+data class TripHistoryItem(
+    @SerializedName("trip_id") val tripId: String,
+    @SerializedName("origin_address") val originAddress: String,
+    @SerializedName("dest_address") val destAddress: String,
+    @SerializedName("distance_km") val distanceKm: Double,
+    @SerializedName("estimated_fare") val estimatedFare: Double,
+    @SerializedName("payment_method") val paymentMethod: String,
+    val status: String,
+    @SerializedName("created_at") val createdAt: String,
+    @SerializedName("driver_name") val driverName: String?,
+    @SerializedName("client_name") val clientName: String?,
+    @SerializedName("vehicle_model") val vehicleModel: String?,
+    @SerializedName("vehicle_plate") val vehiclePlate: String?
+)

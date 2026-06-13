@@ -696,3 +696,50 @@ export const rateDriver = async (req, res) => {
 };
 
 
+// ──────────────────────────────────────────────────────────────────────────────
+// CLIENTES — historial de viajes
+// ──────────────────────────────────────────────────────────────────────────────
+export const getClientTrips = async (req, res) => {
+  const { clientId } = req.params;
+  try {
+    const result = await query(`
+      SELECT t.id AS trip_id, t.origin_address, t.dest_address,
+             t.distance_km, t.estimated_fare, t.payment_method, t.status,
+             t.created_at, t.completed_at,
+             u.full_name AS driver_name,
+             dp.vehicle_model, dp.vehicle_plate
+      FROM trips t
+      LEFT JOIN users u ON t.driver_id = u.id
+      LEFT JOIN driver_profiles dp ON t.driver_id = dp.user_id
+      WHERE t.client_id = $1
+      ORDER BY t.created_at DESC
+    `, [clientId]);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('getClientTrips:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CONDUCTORES — historial de viajes
+// ──────────────────────────────────────────────────────────────────────────────
+export const getDriverTrips = async (req, res) => {
+  const { driverId } = req.params;
+  try {
+    const result = await query(`
+      SELECT t.id AS trip_id, t.origin_address, t.dest_address,
+             t.distance_km, t.estimated_fare, t.payment_method, t.status,
+             t.created_at, t.completed_at,
+             u.full_name AS client_name, u.phone AS client_phone
+      FROM trips t
+      LEFT JOIN users u ON t.client_id = u.id
+      WHERE t.driver_id = $1
+      ORDER BY t.created_at DESC
+    `, [driverId]);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('getDriverTrips:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};

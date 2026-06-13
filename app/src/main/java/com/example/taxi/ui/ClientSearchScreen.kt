@@ -381,30 +381,53 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
                 }
             }
 
-            // ── Botón Mi Ubicación flotante ───────────────────────────────────
-            FloatingActionButton(
-                onClick = {
-                    if (locationGranted) {
-                        fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
-                            loc?.let {
-                                cameraPositionState.move(
-                                    CameraUpdateFactory.newLatLngZoom(LatLng(it.latitude, it.longitude), 16f)
-                                )
-                            }
-                        }
-                    }
-                },
+            // ── Botones flotantes: Mi Ubicación e Historial ───────────────────────────────────
+            var showHistory by remember { mutableStateOf(false) }
+
+            if (showHistory) {
+                TripHistoryDialog(userId = clientId, isDriver = false) {
+                    showHistory = false
+                }
+            }
+
+            Column(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = 16.dp, end = 16.dp)
-                    .size(44.dp)
                     .zIndex(10f),
-                containerColor = MapCard,
-                contentColor = MapYellow,
-                shape = CircleShape,
-                elevation = FloatingActionButtonDefaults.elevation(6.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(Icons.Filled.MyLocation, contentDescription = "Mi ubicación", modifier = Modifier.size(20.dp))
+                FloatingActionButton(
+                    onClick = {
+                        if (locationGranted) {
+                            fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
+                                loc?.let {
+                                    cameraPositionState.move(
+                                        CameraUpdateFactory.newLatLngZoom(LatLng(it.latitude, it.longitude), 16f)
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier.size(44.dp),
+                    containerColor = MapCard,
+                    contentColor = MapYellow,
+                    shape = CircleShape,
+                    elevation = FloatingActionButtonDefaults.elevation(6.dp)
+                ) {
+                    Icon(Icons.Filled.MyLocation, contentDescription = "Mi ubicación", modifier = Modifier.size(20.dp))
+                }
+
+                FloatingActionButton(
+                    onClick = { showHistory = true },
+                    modifier = Modifier.size(44.dp),
+                    containerColor = MapCard,
+                    contentColor = MapYellow,
+                    shape = CircleShape,
+                    elevation = FloatingActionButtonDefaults.elevation(6.dp)
+                ) {
+                    Icon(Icons.Filled.History, contentDescription = "Historial", modifier = Modifier.size(20.dp))
+                }
             }
 
             // ── Indicadores de puntos seleccionados (top) ────────────────────

@@ -134,5 +134,17 @@ interface ApiService {
         @Path("tripId") tripId: String,
         @Body request: com.example.taxi.model.RatingRequest
     ): Response<com.example.taxi.model.RatingResponse>
+
+    // ── Historial ─────────────────────────────────────────────────────────────
+
+    @GET("api/admin/trips/client/{clientId}")
+    suspend fun getClientTrips(
+        @Path("clientId") clientId: String
+    ): Response<com.example.taxi.model.TripHistoryResponse>
+
+    @GET("api/admin/trips/driver/{driverId}")
+    suspend fun getDriverTrips(
+        @Path("driverId") driverId: String
+    ): Response<com.example.taxi.model.TripHistoryResponse>
 }
 

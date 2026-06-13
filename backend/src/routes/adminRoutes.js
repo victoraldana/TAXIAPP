@@ -4,13 +4,18 @@ import {
   getDriverQueueStatus, updateDriverLocation, getPendingTrip,
   getQueue, addToQueue, removeFromQueue, moveInQueue,
   listTrips, assignNextDriver, createTrip, rejectTrip, finishTrip,
-  getTripStatus, rateDriver, notifyArrival, acceptTrip
+  getTripStatus, rateDriver, notifyArrival, acceptTrip,
+  getClientTrips, getDriverTrips
 } from '../controllers/adminController.js';
 
 const router = express.Router();
 
 // Dashboard
 router.get('/dashboard', getDashboard);
+
+// Historiales
+router.get('/trips/client/:clientId', getClientTrips);
+router.get('/trips/driver/:driverId', getDriverTrips);
 
 // Conductores
 router.get('/drivers',                        listDrivers);

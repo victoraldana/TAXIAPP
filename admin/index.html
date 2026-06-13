@@ -97,6 +97,15 @@
       <h2>Viajes</h2>
       <button class="btn-secondary" onclick="loadTrips()">↻ Actualizar</button>
     </div>
+    <div class="search-bar" style="display: flex; gap: 10px; margin-bottom: 16px;">
+      <input type="text" id="searchTrip" placeholder="Buscar por cliente, conductor o dirección..." oninput="filterTrips()" style="flex: 1;" class="input-field">
+      <select id="filterTripStatus" onchange="filterTrips()" class="input-field" style="width: auto;">
+        <option value="all">Todos los estados</option>
+        <option value="pending">Por asignar / Cancelados</option>
+        <option value="active">En proceso / Aceptados</option>
+        <option value="finished">Finalizados</option>
+      </select>
+    </div>
     <div class="table-wrap">
       <table class="data-table">
         <thead><tr><th>ID</th><th>Cliente</th><th>Conductor</th><th>Unidad</th><th>Origen</th><th>Destino</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>

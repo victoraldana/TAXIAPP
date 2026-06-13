@@ -161,12 +161,21 @@ fun DriverHomeScreen(
         }
 
         // ── BARRA SUPERIOR ────────────────────────────────────────────────────
+        var showHistory by remember { mutableStateOf(false) }
+
+        if (showHistory) {
+            TripHistoryDialog(userId = driver.id, isDriver = true) {
+                showHistory = false
+            }
+        }
+
         TopBar(
             driverName = driver.fullName ?: driver.phone ?: "Conductor",
             isOnline = isOnline,
             queuePos = queuePos,
             onToggleOnline = { viewModel.toggleOnline(driver.id) },
             onLogout = onLogout,
+            onShowHistory = { showHistory = true },
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
@@ -244,6 +253,7 @@ private fun TopBar(
     queuePos: Int?,
     onToggleOnline: () -> Unit,
     onLogout: () -> Unit,
+    onShowHistory: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -286,6 +296,11 @@ private fun TopBar(
 
         // Botones acción
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SmallIconBtn(
+                icon = Icons.Filled.History,
+                tint = DrvYellow,
+                onClick = onShowHistory
+            )
             SmallIconBtn(
                 icon = if (isOnline) Icons.Filled.PowerSettingsNew else Icons.Outlined.PowerSettingsNew,
                 tint = if (isOnline) DrvGreen else DrvSub,
