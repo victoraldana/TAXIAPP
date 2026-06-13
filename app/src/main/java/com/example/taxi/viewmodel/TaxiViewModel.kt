@@ -209,6 +209,31 @@ class TaxiViewModel : ViewModel() {
         calculateRoute()
     }
 
+    fun setPointFromMap(latLng: com.google.android.gms.maps.model.LatLng, context: android.content.Context, isPickup: Boolean) {
+        androidx.lifecycle.viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
+            try {
+                val addresses = geocoder.getFromLocation(latLng.latitude, latLng.longitude, 1)
+                val addressName = if (!addresses.isNullOrEmpty()) {
+                    val addr = addresses[0]
+                    addr.thoroughfare ?: addr.featureName ?: addr.getAddressLine(0) ?: "Ubicación en mapa"
+                } else {
+                    "Ubicación en mapa"
+                }
+                
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    val point = LocationPoint(latLng.latitude, latLng.longitude, addressName)
+                    if (isPickup) setPickupPoint(point) else setDestinationPoint(point)
+                }
+            } catch (e: Exception) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    val point = LocationPoint(latLng.latitude, latLng.longitude, "Ubicación en mapa")
+                    if (isPickup) setPickupPoint(point) else setDestinationPoint(point)
+                }
+            }
+        }
+    }
+
     private fun calculateRoute() {
         val uiState = _uiState.value
         val pickup = uiState.pickupPoint

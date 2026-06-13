@@ -268,6 +268,9 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
         )
     )
 
+    enum class MapSelectionMode { ORIGIN, DESTINATION }
+    var mapSelectionMode by remember { mutableStateOf<MapSelectionMode?>(null) }
+
     val hasRoute = uiState.routePoints.isNotEmpty()
     val hasDestination = uiState.destinationPoint != null
     val hasPickup = uiState.pickupPoint != null
@@ -278,7 +281,7 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
 
     BottomSheetScaffold(
         scaffoldState = sheetState,
-        sheetPeekHeight = if (isImeVisible) screenHeight else if (isTripActive) 450.dp else if (hasRoute) 260.dp else 200.dp,
+        sheetPeekHeight = if (mapSelectionMode != null) 0.dp else if (isImeVisible) screenHeight else if (isTripActive) 450.dp else if (hasRoute) 260.dp else 200.dp,
         sheetDragHandle = {
             Box(
                 modifier = Modifier
@@ -307,6 +310,7 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
                 onDestinationQueryChange = viewModel::updateDestinationQuery,
                 onPickupPredictionSelect = { viewModel.selectPrediction(it, isPickup = true) },
                 onDestinationPredictionSelect = { viewModel.selectPrediction(it, isPickup = false) },
+                onSelectOnMap = { mapSelectionMode = it },
                 onUseMyLocation = {
                     if (locationGranted) {
                         fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
@@ -464,6 +468,51 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
                     }
                 }
             }
+
+            // ── Overlay para Selección en Mapa ───────────────────────────────
+            AnimatedVisibility(
+                visible = mapSelectionMode != null,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut(),
+                modifier = Modifier.align(Alignment.Center)
+            ) {
+                Icon(
+                    Icons.Filled.LocationOn,
+                    contentDescription = "Marcador de selección",
+                    tint = if (mapSelectionMode == MapSelectionMode.ORIGIN) MapGreen else MapRed,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .padding(bottom = 24.dp) // Offset para que la punta señale el centro exacto
+                )
+            }
+
+            AnimatedVisibility(
+                visible = mapSelectionMode != null,
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 32.dp)
+                    .padding(horizontal = 24.dp)
+            ) {
+                Button(
+                    onClick = {
+                        val target = cameraPositionState.position.target
+                        viewModel.setPointFromMap(
+                            target, 
+                            context, 
+                            isPickup = mapSelectionMode == MapSelectionMode.ORIGIN
+                        )
+                        mapSelectionMode = null
+                    },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MapDark),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = ButtonDefaults.buttonElevation(8.dp)
+                ) {
+                    Text("Confirmar ubicación", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            }
         }
     }
 }
@@ -502,6 +551,7 @@ private fun BottomSheetContent(
     onDestinationQueryChange: (String) -> Unit,
     onPickupPredictionSelect: (PlacePrediction) -> Unit,
     onDestinationPredictionSelect: (PlacePrediction) -> Unit,
+    onSelectOnMap: (ClientSearchScreen.MapSelectionMode) -> Unit,
     onUseMyLocation: () -> Unit,
     onConfirm: (String) -> Unit,
     onCancelTrip: () -> Unit
@@ -602,15 +652,32 @@ private fun BottomSheetContent(
                     }
                 }
             )
-            AnimatedVisibility(visible = uiState.pickupPredictions.isNotEmpty()) {
-                PredictionsList(
-                    predictions = uiState.pickupPredictions,
-                    dotColor = MapGreen,
-                    onSelect = {
-                        onPickupPredictionSelect(it)
-                        destFocusRequester.requestFocus()
+            AnimatedVisibility(visible = uiState.pickupSearchQuery.isNotEmpty()) {
+                Column {
+                    TextButton(
+                        onClick = { 
+                            onSelectOnMap(ClientSearchScreen.MapSelectionMode.ORIGIN) 
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        colors = ButtonDefaults.textButtonColors(contentColor = MapBlue)
+                    ) {
+                        Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Seleccionar origen en el mapa")
                     }
-                )
+                    if (uiState.pickupPredictions.isNotEmpty()) {
+                        PredictionsList(
+                            predictions = uiState.pickupPredictions,
+                            dotColor = MapGreen,
+                            onSelect = {
+                                onPickupPredictionSelect(it)
+                                destFocusRequester.requestFocus()
+                            }
+                        )
+                    }
+                }
             }
         }
 
@@ -641,16 +708,33 @@ private fun BottomSheetContent(
                 leadingDot = MapRed,
                 modifier = Modifier.focusRequester(destFocusRequester)
             )
-            AnimatedVisibility(visible = uiState.destinationPredictions.isNotEmpty()) {
-                PredictionsList(
-                    predictions = uiState.destinationPredictions,
-                    dotColor = MapRed,
-                    onSelect = {
-                        onDestinationPredictionSelect(it)
-                        focusManager.clearFocus()
-                        keyboardController?.hide()
+            AnimatedVisibility(visible = uiState.destinationSearchQuery.isNotEmpty()) {
+                Column {
+                    TextButton(
+                        onClick = { 
+                            onSelectOnMap(ClientSearchScreen.MapSelectionMode.DESTINATION)
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        colors = ButtonDefaults.textButtonColors(contentColor = MapRed)
+                    ) {
+                        Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Seleccionar destino en el mapa")
                     }
-                )
+                    if (uiState.destinationPredictions.isNotEmpty()) {
+                        PredictionsList(
+                            predictions = uiState.destinationPredictions,
+                            dotColor = MapRed,
+                            onSelect = {
+                                onDestinationPredictionSelect(it)
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                            }
+                        )
+                    }
+                }
             }
         }
 
