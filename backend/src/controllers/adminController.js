@@ -416,27 +416,18 @@ export const createTrip = async (req, res) => {
       const { queue_id, driver_id } = queueRes.rows[0];
       await withTransaction(async (client) => {
         await client.query(
-          `UPDATE trips SET driver_id=$1, status='accepted', accepted_at=NOW() WHERE id=$2`,
+          `UPDATE trips SET driver_id=$1, status='pending' WHERE id=$2`,
           [driver_id, tripId]
         );
         await client.query('UPDATE driver_queue SET is_active=FALSE WHERE id=$1', [queue_id]);
         await client.query('UPDATE driver_profiles SET is_available=FALSE WHERE user_id=$1', [driver_id]);
       });
-
-      const dr = await query(`
-        SELECT u.id, u.full_name, u.phone, u.avatar_url,
-               dp.unit_number, dp.vehicle_make, dp.vehicle_model,
-               dp.vehicle_year, dp.vehicle_plate, dp.vehicle_color, dp.vehicle_type, dp.vehicle_photo_url,
-               dp.rating, dp.total_trips
-        FROM users u JOIN driver_profiles dp ON dp.user_id = u.id WHERE u.id=$1
-      `, [driver_id]);
-      driverData = dr.rows[0];
     }
 
     res.status(201).json({
       success: true,
-      message: driverData ? 'Viaje creado y conductor asignado.' : 'Viaje creado. Sin conductores disponibles.',
-      data: { trip_id: tripId, driver: driverData },
+      message: queueRes.rows.length > 0 ? 'Viaje creado. Esperando que el conductor acepte.' : 'Viaje creado. Sin conductores disponibles.',
+      data: { trip_id: tripId, driver: null },
     });
   } catch (err) {
     console.error('createTrip:', err);
@@ -512,8 +503,8 @@ export const getPendingTrip = async (req, res) => {
              uc.full_name AS client_name
       FROM trips t
       LEFT JOIN users uc ON t.client_id = uc.id
-      WHERE t.driver_id = $1 AND t.status = 'accepted'
-      ORDER BY t.accepted_at DESC
+      WHERE t.driver_id = $1 AND t.status = 'pending'
+      ORDER BY t.created_at DESC
       LIMIT 1
     `, [id]);
 
@@ -528,16 +519,56 @@ export const getPendingTrip = async (req, res) => {
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
+// VIAJES — aceptar viaje (conductor lo acepta)
+// ──────────────────────────────────────────────────────────────────────────────
+export const acceptTrip = async (req, res) => {
+  const { tripId } = req.params;
+  try {
+    const tripRes = await query(
+      `UPDATE trips SET status='accepted', accepted_at=NOW() WHERE id=$1 RETURNING id`,
+      [tripId]
+    );
+    if (tripRes.rows.length === 0)
+      return res.status(404).json({ success: false, message: 'Viaje no encontrado.' });
+
+    res.json({ success: true, message: 'Viaje aceptado.' });
+  } catch (err) {
+    console.error('acceptTrip:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
 // VIAJES — rechazar viaje (conductor lo rechaza)
 // ──────────────────────────────────────────────────────────────────────────────
 export const rejectTrip = async (req, res) => {
   const { tripId } = req.params;
   try {
-    await query(
-      `UPDATE trips SET status='pending', driver_id=NULL, accepted_at=NULL WHERE id=$1`,
-      [tripId]
-    );
-    res.json({ success: true, message: 'Viaje rechazado. Buscando próximo conductor.' });
+    // Buscar próximo conductor en la cola
+    const queueRes = await query(`
+      SELECT dq.id AS queue_id, dq.driver_id
+      FROM driver_queue dq
+      JOIN driver_profiles dp ON dp.user_id = dq.driver_id
+      WHERE dq.is_active = TRUE AND dp.is_approved = TRUE
+      ORDER BY dq.queue_position ASC
+      LIMIT 1
+    `);
+
+    if (queueRes.rows.length > 0) {
+      const { queue_id, driver_id } = queueRes.rows[0];
+      await withTransaction(async (client) => {
+        await client.query(
+          `UPDATE trips SET driver_id=$1 WHERE id=$2`,
+          [driver_id, tripId]
+        );
+        await client.query('UPDATE driver_queue SET is_active=FALSE WHERE id=$1', [queue_id]);
+        await client.query('UPDATE driver_profiles SET is_available=FALSE WHERE user_id=$1', [driver_id]);
+      });
+      res.json({ success: true, message: 'Viaje asignado al siguiente conductor.' });
+    } else {
+      await query(`UPDATE trips SET status='cancelled_no_drivers', driver_id=NULL WHERE id=$1`, [tripId]);
+      res.json({ success: true, message: 'No hay más conductores disponibles.' });
+    }
   } catch (err) {
     console.error('rejectTrip:', err);
     res.status(500).json({ success: false, message: err.message });
@@ -575,19 +606,32 @@ export const getTripStatus = async (req, res) => {
   const { tripId } = req.params;
   try {
     const result = await query(
-      `SELECT t.id, t.status, t.driver_id,
-              ud.full_name AS driver_name,
-              dp.rating AS driver_rating
+      `SELECT t.id, t.status, t.driver_id
        FROM trips t
-       LEFT JOIN users ud ON t.driver_id = ud.id
-       LEFT JOIN driver_profiles dp ON dp.user_id = t.driver_id
        WHERE t.id = $1`,
       [tripId]
     );
     if (result.rows.length === 0)
       return res.status(404).json({ success: false, message: 'Viaje no encontrado.' });
 
-    res.json({ success: true, data: result.rows[0] });
+    const tripData = result.rows[0];
+
+    if (tripData.driver_id) {
+      const dr = await query(`
+        SELECT u.id, u.full_name, u.phone, u.avatar_url,
+               dp.unit_number, dp.vehicle_make, dp.vehicle_model,
+               dp.vehicle_year, dp.vehicle_plate, dp.vehicle_color, dp.vehicle_type, dp.vehicle_photo_url,
+               dp.rating, dp.total_trips
+        FROM users u JOIN driver_profiles dp ON dp.user_id = u.id WHERE u.id=$1
+      `, [tripData.driver_id]);
+      if (dr.rows.length > 0) {
+        tripData.driver = dr.rows[0];
+        tripData.driver_name = dr.rows[0].full_name;
+        tripData.driver_rating = dr.rows[0].rating;
+      }
+    }
+
+    res.json({ success: true, data: tripData });
   } catch (err) {
     console.error('getTripStatus:', err);
     res.status(500).json({ success: false, message: err.message });

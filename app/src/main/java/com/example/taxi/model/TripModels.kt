@@ -65,7 +65,8 @@ data class TripStatusData(
     val id: String,
     val status: String,          // "pending" | "accepted" | "completed" | "cancelled"
     @SerializedName("driver_name")   val driverName: String?,
-    @SerializedName("driver_rating") val driverRating: Double?
+    @SerializedName("driver_rating") val driverRating: Double?,
+    val driver: DriverData? = null
 )
 
 // ─── Calificación del conductor ───────────────────────────────────────────────

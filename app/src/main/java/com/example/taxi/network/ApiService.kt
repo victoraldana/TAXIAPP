@@ -104,6 +104,11 @@ interface ApiService {
         @Path("id") id: String
     ): Response<PendingTripResponse>
 
+    @PATCH("api/admin/trips/{tripId}/accept")
+    suspend fun acceptTrip(
+        @Path("tripId") tripId: String
+    ): Response<AuthModels.SimpleResponse>
+
     @PATCH("api/admin/trips/{tripId}/reject")
     suspend fun rejectTrip(
         @Path("tripId") tripId: String

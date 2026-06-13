@@ -141,8 +141,8 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
         when (val state = tripState) {
             is TripState.Success -> {
                 if (state.driver == null) {
-                    Toast.makeText(context, "Buscando conductor...", Toast.LENGTH_SHORT).show()
-                    viewModel.resetTrip()
+                    // El servidor nos asignó un conductor pero estamos esperando que acepte
+                    // No reseteamos el viaje, solo notificamos
                 } else {
                     if (!hasAnnouncedAssigned) {
                         playNotificationSound(context)
@@ -522,6 +522,23 @@ private fun BottomSheetContent(
                 },
                 isBottomSheet = true
             )
+            return
+        } else {
+            // Mostrar UI de "Esperando confirmación del conductor..."
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                CircularProgressIndicator(color = MapYellow)
+                Text("Esperando que el conductor acepte...", color = MapText, fontWeight = FontWeight.Bold)
+                OutlinedButton(
+                    onClick = onCancelTrip,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MapRed)
+                ) {
+                    Text("Cancelar viaje", color = MapRed)
+                }
+            }
             return
         }
     }

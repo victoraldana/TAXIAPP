@@ -318,17 +318,18 @@ class TaxiViewModel : ViewModel() {
         tripStatusPollingJob?.cancel()
         tripStatusPollingJob = viewModelScope.launch {
             while (true) {
-                delay(5000)
+                delay(3000)
                 try {
                     val res = RetrofitClient.apiService.getTripStatus(tripId)
                     if (res.isSuccessful) {
-                        val status = res.body()?.data?.status
+                        val data = res.body()?.data
+                        val status = data?.status
                         if (status == "completed") {
                             locationPollingJob?.cancel()
                             _driverLocation.value = null
                             _tripState.value = TripState.Completed(
                                 tripId     = tripId,
-                                driverName = res.body()?.data?.driverName ?: driverName
+                                driverName = data.driverName ?: driverName
                             )
                             break
                         } else if (status == "arrived") {
@@ -336,6 +337,18 @@ class TaxiViewModel : ViewModel() {
                             if (currentState is TripState.Success && !currentState.hasArrived) {
                                 _tripState.value = currentState.copy(hasArrived = true)
                             }
+                        } else if (status == "accepted") {
+                            val currentState = _tripState.value
+                            if (currentState is TripState.Success && currentState.driver == null) {
+                                _tripState.value = currentState.copy(driver = data.driver)
+                                // Iniciar polling de ubicación del conductor
+                                data.driver?.id?.let { dId ->
+                                    startPollingLocation(dId)
+                                }
+                            }
+                        } else if (status == "cancelled_no_drivers") {
+                            _tripState.value = TripState.Error("No hay conductores disponibles. Intenta de nuevo más tarde.")
+                            tripStatusPollingJob?.cancel()
                         }
                     }
                 } catch (e: Exception) {

@@ -133,29 +133,38 @@ class DriverViewModel : ViewModel() {
 
     // ── Aceptar viaje ─────────────────────────────────────────────────────────
     fun acceptTrip(tripId: String, driverLat: Double, driverLng: Double) {
-        val current = _tripState.value
-        if (current is DriverTripState.TripAssigned) {
-            // Calcular ruta origen → destino
-            fetchRoute(
-                origin = "${current.originLat},${current.originLng}",
-                dest   = "${current.destLat},${current.destLng}",
-                forDriverLeg = false
-            )
-            // Limpiar ruta conductor → origen
-            _driverToOriginRoute.value = emptyList()
+        viewModelScope.launch {
+            try {
+                val res = RetrofitClient.apiService.acceptTrip(tripId)
+                if (res.isSuccessful) {
+                    val current = _tripState.value
+                    if (current is DriverTripState.TripAssigned) {
+                        // Calcular ruta origen → destino
+                        fetchRoute(
+                            origin = "${current.originLat},${current.originLng}",
+                            dest   = "${current.destLat},${current.destLng}",
+                            forDriverLeg = false
+                        )
+                        // Limpiar ruta conductor → origen
+                        _driverToOriginRoute.value = emptyList()
 
-            _tripState.value = DriverTripState.TripActive(
-                tripId        = current.tripId,
-                clientName    = current.clientName,
-                originAddress = current.originAddress,
-                destAddress   = current.destAddress,
-                distanceKm    = current.distanceKm,
-                paymentMethod = current.paymentMethod,
-                originLat     = current.originLat,
-                originLng     = current.originLng,
-                destLat       = current.destLat,
-                destLng       = current.destLng
-            )
+                        _tripState.value = DriverTripState.TripActive(
+                            tripId        = current.tripId,
+                            clientName    = current.clientName,
+                            originAddress = current.originAddress,
+                            destAddress   = current.destAddress,
+                            distanceKm    = current.distanceKm,
+                            paymentMethod = current.paymentMethod,
+                            originLat     = current.originLat,
+                            originLng     = current.originLng,
+                            destLat       = current.destLat,
+                            destLng       = current.destLng
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("DriverViewModel", "acceptTrip error: ${e.message}")
+            }
         }
     }
 
