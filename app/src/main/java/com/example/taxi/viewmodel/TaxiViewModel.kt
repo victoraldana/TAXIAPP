@@ -210,7 +210,7 @@ class TaxiViewModel : ViewModel() {
     }
 
     fun setPointFromMap(latLng: com.google.android.gms.maps.model.LatLng, context: android.content.Context, isPickup: Boolean) {
-        androidx.lifecycle.viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
             try {
                 val addresses = geocoder.getFromLocation(latLng.latitude, latLng.longitude, 1)

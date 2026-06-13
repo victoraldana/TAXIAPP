@@ -111,6 +111,8 @@ fun distanceBetween(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Flo
     return results[0]
 }
 
+enum class MapSelectionMode { ORIGIN, DESTINATION }
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @SuppressLint("MissingPermission")
 @Composable
@@ -268,7 +270,6 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
         )
     )
 
-    enum class MapSelectionMode { ORIGIN, DESTINATION }
     var mapSelectionMode by remember { mutableStateOf<MapSelectionMode?>(null) }
 
     val hasRoute = uiState.routePoints.isNotEmpty()
@@ -551,7 +552,7 @@ private fun BottomSheetContent(
     onDestinationQueryChange: (String) -> Unit,
     onPickupPredictionSelect: (PlacePrediction) -> Unit,
     onDestinationPredictionSelect: (PlacePrediction) -> Unit,
-    onSelectOnMap: (ClientSearchScreen.MapSelectionMode) -> Unit,
+    onSelectOnMap: (MapSelectionMode) -> Unit,
     onUseMyLocation: () -> Unit,
     onConfirm: (String) -> Unit,
     onCancelTrip: () -> Unit
@@ -656,7 +657,7 @@ private fun BottomSheetContent(
                 Column {
                     TextButton(
                         onClick = { 
-                            onSelectOnMap(ClientSearchScreen.MapSelectionMode.ORIGIN) 
+                            onSelectOnMap(MapSelectionMode.ORIGIN) 
                             focusManager.clearFocus()
                             keyboardController?.hide()
                         },
@@ -712,7 +713,7 @@ private fun BottomSheetContent(
                 Column {
                     TextButton(
                         onClick = { 
-                            onSelectOnMap(ClientSearchScreen.MapSelectionMode.DESTINATION)
+                            onSelectOnMap(MapSelectionMode.DESTINATION)
                             focusManager.clearFocus()
                             keyboardController?.hide()
                         },
