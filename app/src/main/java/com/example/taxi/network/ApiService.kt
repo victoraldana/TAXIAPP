@@ -114,6 +114,11 @@ interface ApiService {
         @Path("tripId") tripId: String
     ): Response<AuthModels.SimpleResponse>
 
+    @PATCH("api/admin/trips/{tripId}/arrive")
+    suspend fun notifyArrival(
+        @Path("tripId") tripId: String
+    ): Response<AuthModels.SimpleResponse>
+
     @GET("api/admin/trips/{tripId}/status")
     suspend fun getTripStatus(
         @Path("tripId") tripId: String

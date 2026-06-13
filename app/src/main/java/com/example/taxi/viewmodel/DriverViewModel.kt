@@ -43,7 +43,8 @@ sealed class DriverTripState {
         val originLat: Double = 0.0,
         val originLng: Double = 0.0,
         val destLat: Double = 0.0,
-        val destLng: Double = 0.0
+        val destLng: Double = 0.0,
+        val hasArrived: Boolean = false
     ) : DriverTripState()
 }
 
@@ -166,6 +167,21 @@ class DriverViewModel : ViewModel() {
                 Log.e("DriverViewModel", "rejectTrip error: ${e.message}")
             }
             _tripState.value = DriverTripState.Idle
+        }
+    }
+
+    // ── Avisar Llegada ────────────────────────────────────────────────────────
+    fun notifyArrival(tripId: String) {
+        val current = _tripState.value
+        if (current is DriverTripState.TripActive) {
+            viewModelScope.launch {
+                try {
+                    RetrofitClient.apiService.notifyArrival(tripId)
+                    _tripState.value = current.copy(hasArrived = true)
+                } catch (e: Exception) {
+                    Log.e("DriverViewModel", "notifyArrival error: ${e.message}")
+                }
+            }
         }
     }
 

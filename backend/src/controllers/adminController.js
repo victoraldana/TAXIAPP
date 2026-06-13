@@ -593,6 +593,23 @@ export const getTripStatus = async (req, res) => {
   }
 };
 
+export const notifyArrival = async (req, res) => {
+  const { tripId } = req.params;
+  try {
+    const tripRes = await query(
+      `UPDATE trips SET status='arrived' WHERE id=$1 RETURNING id`,
+      [tripId]
+    );
+    if (tripRes.rows.length === 0)
+      return res.status(404).json({ success: false, message: 'Viaje no encontrado.' });
+
+    res.json({ success: true, message: 'Se notificó la llegada al cliente.' });
+  } catch (err) {
+    console.error('notifyArrival:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // ──────────────────────────────────────────────────────────────────────────────
 // CALIFICACIÓN — cliente califica al conductor
 // ──────────────────────────────────────────────────────────────────────────────

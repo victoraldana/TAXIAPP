@@ -122,6 +122,7 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
 
     // ── Errores y sin conductor disponible ────────────────────────────────────
     var hasAnnouncedArrival by remember { mutableStateOf(false) }
+    var hasAnnouncedAssigned by remember { mutableStateOf(false) }
 
     LaunchedEffect(tripState) {
         when (val state = tripState) {
@@ -130,20 +131,30 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
                     Toast.makeText(context, "Buscando conductor...", Toast.LENGTH_SHORT).show()
                     viewModel.resetTrip()
                 } else {
-                    // Viaje asignado al cliente, reproducir sonido
-                    playNotificationSound(context)
-                    hasAnnouncedArrival = false
+                    if (!hasAnnouncedAssigned) {
+                        playNotificationSound(context)
+                        hasAnnouncedAssigned = true
+                    }
+                    if (state.hasArrived && !hasAnnouncedArrival) {
+                        playNotificationSound(context)
+                        Toast.makeText(context, "¡Tu taxi ha llegado!", Toast.LENGTH_LONG).show()
+                        hasAnnouncedArrival = true
+                    }
                 }
             }
             is TripState.Error -> {
                 Toast.makeText(context, state.message, Toast.LENGTH_LONG).show()
                 viewModel.resetTrip()
             }
+            is TripState.Idle -> {
+                hasAnnouncedArrival = false
+                hasAnnouncedAssigned = false
+            }
             else -> {}
         }
     }
     
-    // ── Detectar si el taxi llegó al origen ──────────────────────────────────
+    // ── Detectar si el taxi llegó al origen por cercanía (Fallback) ──────────
     val drvLoc by viewModel.driverLocation.collectAsState()
     val pkp = uiState.pickupPoint
     LaunchedEffect(drvLoc) {

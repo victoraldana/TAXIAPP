@@ -49,7 +49,7 @@ data class TaxiUiState(
 sealed class TripState {
     object Idle    : TripState()
     object Loading : TripState()
-    data class Success(val driver: DriverData?, val tripId: String) : TripState()
+    data class Success(val driver: DriverData?, val tripId: String, val hasArrived: Boolean = false) : TripState()
     data class Completed(val tripId: String, val driverName: String?) : TripState()
     data class Error(val message: String) : TripState()
 }
@@ -330,6 +330,11 @@ class TaxiViewModel : ViewModel() {
                                 driverName = res.body()?.data?.driverName ?: driverName
                             )
                             break
+                        } else if (status == "arrived") {
+                            val currentState = _tripState.value
+                            if (currentState is TripState.Success && !currentState.hasArrived) {
+                                _tripState.value = currentState.copy(hasArrived = true)
+                            }
                         }
                     }
                 } catch (e: Exception) {

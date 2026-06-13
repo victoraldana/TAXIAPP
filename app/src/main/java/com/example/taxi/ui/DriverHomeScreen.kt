@@ -206,6 +206,7 @@ fun DriverHomeScreen(
                 )
                 is DriverTripState.TripActive -> TripActivePanel(
                     trip = state,
+                    onNotifyArrival = { viewModel.notifyArrival(state.tripId) },
                     onFinish = { viewModel.finishTrip(state.tripId, driver.id) }
                 )
             }
@@ -513,6 +514,7 @@ private fun TripIncomingPanel(
 @Composable
 private fun TripActivePanel(
     trip: DriverTripState.TripActive,
+    onNotifyArrival: () -> Unit,
     onFinish: () -> Unit
 ) {
     Column(
@@ -542,22 +544,46 @@ private fun TripActivePanel(
 
         TripRouteCard(origin = trip.originAddress, dest = trip.destAddress, distance = trip.distanceKm)
 
-        // Botón finalizar
-        Button(
-            onClick = onFinish,
-            modifier = Modifier.fillMaxWidth().height(54.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-            contentPadding = PaddingValues(0.dp)
-        ) {
-            Box(
-                Modifier.fillMaxSize()
-                    .background(Brush.horizontalGradient(listOf(DrvGreen, Color(0xFF00E676))), RoundedCornerShape(16.dp)),
-                contentAlignment = Alignment.Center
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // Botón Avisar Llegada (si no ha llegado)
+            if (!trip.hasArrived) {
+                Button(
+                    onClick = onNotifyArrival,
+                    modifier = Modifier.weight(1f).height(54.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Box(
+                        Modifier.fillMaxSize()
+                            .background(Brush.horizontalGradient(listOf(DrvBlue, Color(0xFF29B6F6))), RoundedCornerShape(16.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.NotificationsActive, null, tint = DrvDark, modifier = Modifier.size(20.dp))
+                            Text("Llegué", fontWeight = FontWeight.ExtraBold, color = DrvDark, fontSize = 15.sp)
+                        }
+                    }
+                }
+            }
+
+            // Botón finalizar
+            Button(
+                onClick = onFinish,
+                modifier = Modifier.weight(1f).height(54.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                contentPadding = PaddingValues(0.dp)
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.CheckCircle, null, tint = Color(0xFF001A00), modifier = Modifier.size(22.dp))
-                    Text("Finalizar Viaje", fontWeight = FontWeight.ExtraBold, color = Color(0xFF001A00), fontSize = 16.sp)
+                Box(
+                    Modifier.fillMaxSize()
+                        .background(Brush.horizontalGradient(listOf(DrvGreen, Color(0xFF00E676))), RoundedCornerShape(16.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.CheckCircle, null, tint = Color(0xFF001A00), modifier = Modifier.size(20.dp))
+                        Text("Finalizar", fontWeight = FontWeight.ExtraBold, color = Color(0xFF001A00), fontSize = 15.sp)
+                    }
                 }
             }
         }
