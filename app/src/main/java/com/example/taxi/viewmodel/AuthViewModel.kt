@@ -249,4 +249,11 @@ class AuthViewModel : ViewModel() {
             }
         }
     }
+
+    // ── Logout ────────────────────────────────────────────────────────────────
+    fun logout() {
+        _loggedUser.value = null
+        _authState.value  = null
+        _otpState.value   = null
+    }
 }
