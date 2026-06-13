@@ -3,11 +3,18 @@ package com.example.taxi.network
 import com.example.taxi.model.AuthModels
 import com.example.taxi.model.CreateTripRequest
 import com.example.taxi.model.CreateTripResponse
+import com.example.taxi.model.DriverLocationResponse
+import com.example.taxi.model.DriverQueueStatusResponse
+import com.example.taxi.model.QueueAddResponse
+import com.example.taxi.model.PendingTripResponse
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Path
 
 interface ApiService {
 
@@ -30,13 +37,11 @@ interface ApiService {
         @Body request: AuthModels.RegisterRequest
     ): Response<AuthModels.AuthResponse>
 
-    /** Login clásico por email */
     @POST("api/auth/login")
     suspend fun login(
         @Body request: AuthModels.LoginRequest
     ): Response<AuthModels.AuthResponse>
 
-    /** Login principal por teléfono */
     @POST("api/auth/login/phone")
     suspend fun loginByPhone(
         @Body request: AuthModels.LoginByPhoneRequest
@@ -57,7 +62,7 @@ interface ApiService {
         @Header("Authorization") token: String
     ): Response<AuthModels.MeResponse>
 
-    // ── Viajes ────────────────────────────────────────────────────────────────
+    // ── Viajes (Cliente) ──────────────────────────────────────────────────────
 
     @POST("api/admin/trips")
     suspend fun createTrip(
@@ -66,6 +71,47 @@ interface ApiService {
 
     @GET("api/admin/drivers/{id}/location")
     suspend fun getDriverLocation(
-        @retrofit2.http.Path("id") id: String
-    ): Response<com.example.taxi.model.DriverLocationResponse>
+        @Path("id") id: String
+    ): Response<DriverLocationResponse>
+
+    // ── Conductor: cola y ubicación ───────────────────────────────────────────
+
+    @GET("api/admin/drivers/{id}/queue-status")
+    suspend fun getDriverQueueStatus(
+        @Path("id") id: String
+    ): Response<DriverQueueStatusResponse>
+
+    @POST("api/admin/queue/{driverId}")
+    suspend fun addDriverToQueue(
+        @Path("driverId") driverId: String
+    ): Response<QueueAddResponse>
+
+    @DELETE("api/admin/queue/{driverId}")
+    suspend fun removeDriverFromQueue(
+        @Path("driverId") driverId: String
+    ): Response<AuthModels.SimpleResponse>
+
+    @PATCH("api/admin/drivers/{id}/location")
+    suspend fun updateDriverLocation(
+        @Path("id") id: String,
+        @Body location: Map<String, Double>
+    ): Response<AuthModels.SimpleResponse>
+
+    // ── Conductor: viaje asignado ─────────────────────────────────────────────
+
+    @GET("api/admin/drivers/{id}/pending-trip")
+    suspend fun getPendingTrip(
+        @Path("id") id: String
+    ): Response<PendingTripResponse>
+
+    @PATCH("api/admin/trips/{tripId}/reject")
+    suspend fun rejectTrip(
+        @Path("tripId") tripId: String
+    ): Response<AuthModels.SimpleResponse>
+
+    @PATCH("api/admin/trips/{tripId}/finish")
+    suspend fun finishTrip(
+        @Path("tripId") tripId: String
+    ): Response<AuthModels.SimpleResponse>
 }
+

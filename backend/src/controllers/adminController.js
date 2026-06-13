@@ -454,3 +454,115 @@ async function reorderQueue() {
     await query('UPDATE driver_queue SET queue_position=$1 WHERE id=$2', [i + 1, rows.rows[i].id]);
   }
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CONDUCTOR — estado en cola (para la app del conductor)
+// ──────────────────────────────────────────────────────────────────────────────
+export const getDriverQueueStatus = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await query(
+      'SELECT is_active, queue_position FROM driver_queue WHERE driver_id=$1 AND is_active=TRUE',
+      [id]
+    );
+    const inQueue = result.rows.length > 0;
+    res.json({
+      success: true,
+      data: {
+        in_queue:       inQueue,
+        queue_position: inQueue ? result.rows[0].queue_position : null,
+        is_active:      inQueue,
+      }
+    });
+  } catch (err) {
+    console.error('getDriverQueueStatus:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CONDUCTOR — actualizar ubicación (desde la app)
+// ──────────────────────────────────────────────────────────────────────────────
+export const updateDriverLocation = async (req, res) => {
+  const { id } = req.params;
+  const { lat, lng } = req.body;
+  try {
+    await query(
+      'UPDATE driver_profiles SET current_lat=$1, current_lng=$2 WHERE user_id=$3',
+      [lat, lng, id]
+    );
+    res.json({ success: true, message: 'Ubicación actualizada.' });
+  } catch (err) {
+    console.error('updateDriverLocation:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CONDUCTOR — viaje pendiente asignado a él (polling desde la app)
+// ──────────────────────────────────────────────────────────────────────────────
+export const getPendingTrip = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await query(`
+      SELECT t.id AS trip_id, t.origin_address, t.dest_address,
+             t.distance_km, t.estimated_fare, t.status,
+             uc.full_name AS client_name
+      FROM trips t
+      LEFT JOIN users uc ON t.client_id = uc.id
+      WHERE t.driver_id = $1 AND t.status = 'accepted'
+      ORDER BY t.accepted_at DESC
+      LIMIT 1
+    `, [id]);
+
+    if (result.rows.length === 0)
+      return res.json({ success: true, data: null });
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    console.error('getPendingTrip:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// VIAJES — rechazar viaje (conductor lo rechaza)
+// ──────────────────────────────────────────────────────────────────────────────
+export const rejectTrip = async (req, res) => {
+  const { tripId } = req.params;
+  try {
+    await query(
+      `UPDATE trips SET status='pending', driver_id=NULL, accepted_at=NULL WHERE id=$1`,
+      [tripId]
+    );
+    res.json({ success: true, message: 'Viaje rechazado. Buscando próximo conductor.' });
+  } catch (err) {
+    console.error('rejectTrip:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// VIAJES — finalizar viaje (conductor lo completa)
+// ──────────────────────────────────────────────────────────────────────────────
+export const finishTrip = async (req, res) => {
+  const { tripId } = req.params;
+  try {
+    const tripRes = await query(
+      `UPDATE trips SET status='completed', completed_at=NOW() WHERE id=$1 RETURNING driver_id`,
+      [tripId]
+    );
+    if (tripRes.rows.length === 0)
+      return res.status(404).json({ success: false, message: 'Viaje no encontrado.' });
+
+    const driverId = tripRes.rows[0].driver_id;
+    if (driverId) {
+      await query('UPDATE driver_profiles SET total_trips=total_trips+1, is_available=TRUE WHERE user_id=$1', [driverId]);
+    }
+    res.json({ success: true, message: 'Viaje finalizado. ¡Buen trabajo!' });
+  } catch (err) {
+    console.error('finishTrip:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+

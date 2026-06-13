@@ -20,6 +20,7 @@ import com.example.taxi.ui.LoginScreen
 import com.example.taxi.ui.RegisterScreen
 import com.example.taxi.ui.theme.TAXITheme
 import com.example.taxi.viewmodel.AuthViewModel
+import com.example.taxi.viewmodel.DriverViewModel
 import com.example.taxi.viewmodel.TaxiViewModel
 import com.google.android.libraries.places.api.Places
 
@@ -45,6 +46,7 @@ fun TaxiNavGraph() {
     val navController: NavHostController = rememberNavController()
     val taxiViewModel: TaxiViewModel     = viewModel()
     val authViewModel: AuthViewModel     = viewModel()
+    val driverViewModel: DriverViewModel = viewModel()
 
     NavHost(navController = navController, startDestination = "login") {
 
@@ -101,9 +103,21 @@ fun TaxiNavGraph() {
             )
         }
 
-        // ── Pantalla del conductor ─────────────────────────────────────────────
+        // ── App del conductor ─────────────────────────────────────────────────
         composable("driver_home") {
-            DriverHomeScreen()
+            val loggedUser by authViewModel.loggedUser.collectAsState()
+            loggedUser?.let { user ->
+                DriverHomeScreen(
+                    driver = user,
+                    viewModel = driverViewModel,
+                    onLogout = {
+                        authViewModel.logout()
+                        navController.navigate("login") {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
+                )
+            }
         }
     }
 }

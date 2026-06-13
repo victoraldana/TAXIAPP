@@ -1,57 +1,544 @@
 package com.example.taxi.ui
 
+import android.Manifest
+import android.annotation.SuppressLint
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.*
+import androidx.core.content.ContextCompat
+import com.example.taxi.model.AuthModels
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
+import com.example.taxi.viewmodel.DriverViewModel
+import com.example.taxi.viewmodel.DriverTripState
+
+// ─── Paleta ──────────────────────────────────────────────────────────────────
+private val DrvDark    = Color(0xFF0A1628)
+private val DrvCard    = Color(0xFF132033)
+private val DrvBorder  = Color(0xFF1E3050)
+private val DrvYellow  = Color(0xFFFFC107)
+private val DrvYellowD = Color(0xFFE6A800)
+private val DrvText    = Color(0xFFF0F6FF)
+private val DrvSub     = Color(0xFF7A90B0)
+private val DrvGreen   = Color(0xFF00C853)
+private val DrvRed     = Color(0xFFFF5252)
+private val DrvBlue    = Color(0xFF4FC3F7)
 
 @OptIn(ExperimentalMaterial3Api::class)
+@SuppressLint("MissingPermission")
 @Composable
-fun DriverHomeScreen() {
-    val initialPos = LatLng(19.4326, -99.1332)
-    val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(initialPos, 15f)
+fun DriverHomeScreen(
+    driver: AuthModels.UserData,
+    viewModel: DriverViewModel,
+    onLogout: () -> Unit
+) {
+    val context    = LocalContext.current
+    val tripState  by viewModel.tripState.collectAsState()
+    val isOnline   by viewModel.isOnline.collectAsState()
+    val queuePos   by viewModel.queuePosition.collectAsState()
+
+    val fusedClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+
+    var locationGranted by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val permLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { locationGranted = it }
+
+    LaunchedEffect(Unit) {
+        if (!locationGranted) permLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        viewModel.init(driver.id)
     }
 
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Modo Conductor") }
+    // Subir ubicación cada 5 segundos si está online
+    LaunchedEffect(isOnline, locationGranted) {
+        if (isOnline && locationGranted) {
+            while (true) {
+                fusedClient.lastLocation.addOnSuccessListener { loc ->
+                    loc?.let { viewModel.updateLocation(driver.id, it.latitude, it.longitude) }
+                }
+                kotlinx.coroutines.delay(5000)
+            }
+        }
+    }
+
+    val cameraState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(LatLng(10.5, -66.9), 14f)
+    }
+
+    // Centrar mapa en mi ubicación al inicio
+    LaunchedEffect(locationGranted) {
+        if (locationGranted) {
+            fusedClient.lastLocation.addOnSuccessListener { loc ->
+                loc?.let { cameraState.move(CameraUpdateFactory.newLatLngZoom(LatLng(it.latitude, it.longitude), 15f)) }
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(DrvDark)
+    ) {
+        // ── MAPA ──────────────────────────────────────────────────────────────
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraState,
+            properties = MapProperties(isMyLocationEnabled = locationGranted),
+            uiSettings = MapUiSettings(zoomControlsEnabled = false, myLocationButtonEnabled = false, compassEnabled = true)
+        )
+
+        // ── BARRA SUPERIOR ────────────────────────────────────────────────────
+        TopBar(
+            driverName = driver.fullName ?: driver.phone ?: "Conductor",
+            isOnline = isOnline,
+            queuePos = queuePos,
+            onToggleOnline = { viewModel.toggleOnline(driver.id) },
+            onLogout = onLogout,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+        )
+
+        // ── PANEL INFERIOR ────────────────────────────────────────────────────
+        AnimatedContent(
+            targetState = tripState,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            transitionSpec = {
+                slideInVertically { it } togetherWith slideOutVertically { it }
+            },
+            label = "bottom_panel"
+        ) { state ->
+            when (state) {
+                is DriverTripState.Idle -> IdlePanel(
+                    isOnline = isOnline,
+                    queuePos = queuePos,
+                    onToggle = { viewModel.toggleOnline(driver.id) }
+                )
+                is DriverTripState.TripAssigned -> TripIncomingPanel(
+                    trip = state,
+                    onAccept = { viewModel.acceptTrip(state.tripId) },
+                    onReject = { viewModel.rejectTrip(state.tripId, driver.id) }
+                )
+                is DriverTripState.TripActive -> TripActivePanel(
+                    trip = state,
+                    onFinish = { viewModel.finishTrip(state.tripId, driver.id) }
+                )
+            }
+        }
+
+        // ── FAB MI UBICACIÓN ─────────────────────────────────────────────────
+        FloatingActionButton(
+            onClick = {
+                if (locationGranted) {
+                    fusedClient.lastLocation.addOnSuccessListener { loc ->
+                        loc?.let { cameraState.move(CameraUpdateFactory.newLatLngZoom(LatLng(it.latitude, it.longitude), 16f)) }
+                    }
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = 16.dp, bottom = 280.dp)
+                .size(46.dp),
+            containerColor = DrvCard,
+            contentColor = DrvYellow,
+            shape = CircleShape,
+            elevation = FloatingActionButtonDefaults.elevation(6.dp)
+        ) {
+            Icon(Icons.Filled.MyLocation, contentDescription = null, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+// ─── Barra superior ───────────────────────────────────────────────────────────
+@Composable
+private fun TopBar(
+    driverName: String,
+    isOnline: Boolean,
+    queuePos: Int?,
+    onToggleOnline: () -> Unit,
+    onLogout: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Nombre + estado
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(DrvCard.copy(alpha = 0.95f))
+                .border(1.dp, DrvBorder, RoundedCornerShape(20.dp))
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(if (isOnline) DrvGreen else DrvSub)
+            )
+            Column {
+                Text(driverName, fontWeight = FontWeight.Bold, color = DrvText, fontSize = 14.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(if (isOnline) "En línea" else "Fuera de línea",
+                    color = if (isOnline) DrvGreen else DrvSub, fontSize = 11.sp)
+            }
+            if (queuePos != null && isOnline) {
+                VerticalDivider(color = DrvBorder, modifier = Modifier.height(28.dp))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("TURNO", fontSize = 9.sp, color = DrvSub, letterSpacing = 1.sp, fontWeight = FontWeight.Bold)
+                    Text("#$queuePos", fontSize = 16.sp, color = DrvYellow, fontWeight = FontWeight.ExtraBold)
+                }
+            }
+        }
+
+        // Botones acción
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SmallIconBtn(
+                icon = if (isOnline) Icons.Filled.PowerSettingsNew else Icons.Outlined.PowerSettingsNew,
+                tint = if (isOnline) DrvGreen else DrvSub,
+                onClick = onToggleOnline
+            )
+            SmallIconBtn(icon = Icons.Filled.Logout, tint = DrvRed, onClick = onLogout)
+        }
+    }
+}
+
+@Composable
+private fun SmallIconBtn(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: Color,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(DrvCard.copy(alpha = 0.95f))
+            .border(1.dp, DrvBorder, CircleShape)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+    }
+}
+
+// ─── Panel: Esperando (Idle) ──────────────────────────────────────────────────
+@Composable
+private fun IdlePanel(isOnline: Boolean, queuePos: Int?, onToggle: () -> Unit) {
+    val infiniteTransition = rememberInfiniteTransition(label = "idle_anim")
+    val glowAlpha by infiniteTransition.animateFloat(
+        0.3f, 0.8f,
+        animationSpec = infiniteRepeatable(tween(1500, easing = EaseInOutSine), RepeatMode.Reverse),
+        label = "glow"
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+            .background(DrvCard)
+            .border(1.dp, DrvBorder, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+            .navigationBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Handle
+        Box(Modifier.width(40.dp).height(4.dp).clip(CircleShape).background(DrvBorder))
+
+        if (!isOnline) {
+            // Estado offline
+            Icon(Icons.Filled.PowerSettingsNew, null, tint = DrvSub, modifier = Modifier.size(48.dp))
+            Text("Estás fuera de línea", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = DrvText)
+            Text("Actívate para recibir solicitudes de viaje", color = DrvSub, fontSize = 13.sp)
+
+            Button(
+                onClick = onToggle,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Box(
+                    Modifier.fillMaxSize()
+                        .background(Brush.horizontalGradient(listOf(DrvGreen, Color(0xFF00E676))), RoundedCornerShape(16.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.PlayArrow, null, tint = Color(0xFF001A00), modifier = Modifier.size(22.dp))
+                        Text("Activarme", fontWeight = FontWeight.ExtraBold, color = Color(0xFF001A00), fontSize = 16.sp)
+                    }
+                }
+            }
+        } else {
+            // Estado online - esperando
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(80.dp)) {
+                Box(
+                    Modifier.size(80.dp).clip(CircleShape)
+                        .background(DrvGreen.copy(alpha = glowAlpha * 0.15f))
+                )
+                Box(
+                    Modifier.size(60.dp).clip(CircleShape)
+                        .background(DrvGreen.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.DirectionsCar, null, tint = DrvGreen, modifier = Modifier.size(32.dp))
+                }
+            }
+
+            Text("Esperando solicitudes...", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = DrvText)
+
+            if (queuePos != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(DrvYellow.copy(alpha = 0.08f))
+                        .border(1.dp, DrvYellow.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("#$queuePos", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = DrvYellow)
+                    Column {
+                        Text("Tu posición en la cola", fontWeight = FontWeight.SemiBold, color = DrvText)
+                        Text("Cuando llegues al turno #1 el sistema te asignará el próximo viaje",
+                            fontSize = 12.sp, color = DrvSub)
+                    }
+                }
+            }
+
+            CircularProgressIndicator(
+                modifier = Modifier.size(28.dp),
+                color = DrvYellow,
+                strokeWidth = 2.5.dp
             )
         }
-    ) { innerPadding ->
-        Box(modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding)) {
-            
-            GoogleMap(
-                modifier = Modifier.fillMaxSize(),
-                cameraPositionState = cameraPositionState
-            )
+    }
+}
 
-            Card(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(16.dp)
-                    .fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(8.dp)
+// ─── Panel: Viaje entrante ────────────────────────────────────────────────────
+@Composable
+private fun TripIncomingPanel(
+    trip: DriverTripState.TripAssigned,
+    onAccept: () -> Unit,
+    onReject: () -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "incoming")
+    val borderAlpha by infiniteTransition.animateFloat(
+        0.3f, 1f,
+        animationSpec = infiniteRepeatable(tween(600, easing = LinearEasing), RepeatMode.Reverse),
+        label = "border_pulse"
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+            .background(DrvCard)
+            .border(1.dp, DrvYellow.copy(alpha = borderAlpha), RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+            .navigationBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Box(Modifier.width(40.dp).height(4.dp).clip(CircleShape).background(DrvYellow.copy(0.5f)).align(Alignment.CenterHorizontally))
+
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(DrvYellow.copy(0.15f)),
+                contentAlignment = Alignment.Center
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                Icon(Icons.Filled.Notifications, null, tint = DrvYellow, modifier = Modifier.size(22.dp))
+            }
+            Column {
+                Text("¡Nueva solicitud de viaje!", fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = DrvText)
+                Text("Responde antes de que expire", fontSize = 12.sp, color = DrvSub)
+            }
+        }
+
+        // Origen - Destino
+        TripRouteCard(origin = trip.originAddress, dest = trip.destAddress, distance = trip.distanceKm)
+
+        // Precio estimado
+        Row(
+            modifier = Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(DrvGreen.copy(0.08f))
+                .border(1.dp, DrvGreen.copy(0.3f), RoundedCornerShape(12.dp))
+                .padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Filled.AttachMoney, null, tint = DrvGreen, modifier = Modifier.size(20.dp))
+                Text("Ingreso estimado", color = DrvSub, fontSize = 13.sp)
+            }
+            Text(
+                trip.estimatedFare?.let { "$${"%.2f".format(it)}" } ?: "Acordar",
+                fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = DrvGreen
+            )
+        }
+
+        // Botones
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = onReject,
+                modifier = Modifier.weight(1f).height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, DrvRed.copy(0.5f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = DrvRed)
+            ) {
+                Icon(Icons.Filled.Close, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Rechazar", fontWeight = FontWeight.SemiBold)
+            }
+
+            Button(
+                onClick = onAccept,
+                modifier = Modifier.weight(1f).height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Box(
+                    Modifier.fillMaxSize()
+                        .background(Brush.horizontalGradient(listOf(DrvYellow, DrvYellowD)), RoundedCornerShape(14.dp)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "Esperando solicitudes...",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Check, null, tint = DrvDark, modifier = Modifier.size(18.dp))
+                        Text("Aceptar", fontWeight = FontWeight.ExtraBold, color = DrvDark, fontSize = 15.sp)
+                    }
                 }
+            }
+        }
+    }
+}
+
+// ─── Panel: Viaje activo ──────────────────────────────────────────────────────
+@Composable
+private fun TripActivePanel(
+    trip: DriverTripState.TripActive,
+    onFinish: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+            .background(DrvCard)
+            .border(1.dp, DrvGreen.copy(0.4f), RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+            .navigationBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Box(Modifier.width(40.dp).height(4.dp).clip(CircleShape).background(DrvBorder).align(Alignment.CenterHorizontally))
+
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(DrvGreen.copy(0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Filled.DirectionsCar, null, tint = DrvGreen, modifier = Modifier.size(22.dp))
+            }
+            Column {
+                Text("Viaje en curso", fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = DrvText)
+                Text("Cliente: ${trip.clientName}", fontSize = 13.sp, color = DrvSub)
+            }
+        }
+
+        TripRouteCard(origin = trip.originAddress, dest = trip.destAddress, distance = trip.distanceKm)
+
+        // Botón finalizar
+        Button(
+            onClick = onFinish,
+            modifier = Modifier.fillMaxWidth().height(54.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+            contentPadding = PaddingValues(0.dp)
+        ) {
+            Box(
+                Modifier.fillMaxSize()
+                    .background(Brush.horizontalGradient(listOf(DrvGreen, Color(0xFF00E676))), RoundedCornerShape(16.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.CheckCircle, null, tint = Color(0xFF001A00), modifier = Modifier.size(22.dp))
+                    Text("Finalizar Viaje", fontWeight = FontWeight.ExtraBold, color = Color(0xFF001A00), fontSize = 16.sp)
+                }
+            }
+        }
+    }
+}
+
+// ─── Componente de ruta (compartido) ─────────────────────────────────────────
+@Composable
+private fun TripRouteCard(origin: String, dest: String, distance: Double?) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(DrvDark.copy(0.7f))
+            .border(1.dp, DrvBorder, RoundedCornerShape(14.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Icon(Icons.Filled.RadioButtonChecked, null, tint = DrvGreen, modifier = Modifier.size(16.dp).padding(top = 2.dp))
+            Column {
+                Text("ORIGEN", fontSize = 9.sp, color = DrvSub, letterSpacing = 1.sp, fontWeight = FontWeight.Bold)
+                Text(origin, fontSize = 13.sp, color = DrvText, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        Box(Modifier.padding(start = 7.dp).width(2.dp).height(12.dp).background(DrvBorder))
+        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Icon(Icons.Filled.LocationOn, null, tint = DrvRed, modifier = Modifier.size(16.dp).padding(top = 2.dp))
+            Column {
+                Text("DESTINO", fontSize = 9.sp, color = DrvSub, letterSpacing = 1.sp, fontWeight = FontWeight.Bold)
+                Text(dest, fontSize = 13.sp, color = DrvText, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        if (distance != null) {
+            HorizontalDivider(color = DrvBorder)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Outlined.Straighten, null, tint = DrvBlue, modifier = Modifier.size(14.dp))
+                Text("${"%.1f".format(distance)} km", fontSize = 12.sp, color = DrvBlue, fontWeight = FontWeight.SemiBold)
             }
         }
     }
