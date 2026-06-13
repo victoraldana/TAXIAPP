@@ -32,8 +32,6 @@ fun TripHistoryDialog(
 ) {
     var history by remember { mutableStateOf<List<TripHistoryItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-    var selectedTabIndex by remember { mutableStateOf(0) }
-    val tabs = listOf("Pendientes", "En proceso", "Finalizados")
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(userId) {
@@ -91,46 +89,23 @@ fun TripHistoryDialog(
                         Icon(Icons.Filled.Close, contentDescription = "Cerrar")
                     }
                 }
-
-                TabRow(
-                    selectedTabIndex = selectedTabIndex,
-                    containerColor = Color.White,
-                    contentColor = Color(0xFF0A1628)
-                ) {
-                    tabs.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedTabIndex == index,
-                            onClick = { selectedTabIndex = index },
-                            text = { Text(title, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
-                        )
-                    }
-                }
-                
                 Divider(color = Color(0xFFDDE5ED))
-
-                val filteredHistory = history.filter { trip ->
-                    when (selectedTabIndex) {
-                        0 -> trip.status == "pending"
-                        1 -> trip.status in listOf("accepted", "arrived", "on_route", "in_progress")
-                        else -> trip.status in listOf("completed", "cancelled", "cancelled_no_drivers")
-                    }
-                }
 
                 // Content
                 if (isLoading) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = Color(0xFFFFC107))
                     }
-                } else if (filteredHistory.isEmpty()) {
+                } else if (history.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No hay viajes en esta categoría.", color = Color(0xFF7A90B0))
+                        Text("No tienes viajes registrados.", color = Color(0xFF7A90B0))
                     }
                 } else {
                     LazyColumn(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(filteredHistory) { trip ->
+                        items(history) { trip ->
                             TripHistoryCard(trip, isDriver)
                         }
                     }
