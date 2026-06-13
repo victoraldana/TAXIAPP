@@ -81,6 +81,8 @@ private val banners = listOf(
 @Composable
 fun HomeScreen(
     userName: String = "Usuario",
+    clientId: String,
+    onLogout: () -> Unit,
     onServiceSelected: (serviceId: String) -> Unit
 ) {
     val pagerState = rememberPagerState(pageCount = { banners.size })
@@ -109,7 +111,19 @@ fun HomeScreen(
                 .navigationBarsPadding()
         ) {
             // ── Top Bar ──────────────────────────────────────────────────────
-            HomeTopBar(userName = userName)
+            var showHistory by remember { mutableStateOf(false) }
+
+            if (showHistory) {
+                TripHistoryDialog(userId = clientId, isDriver = false) {
+                    showHistory = false
+                }
+            }
+
+            HomeTopBar(
+                userName = userName,
+                onLogout = onLogout,
+                onShowHistory = { showHistory = true }
+            )
 
             Spacer(Modifier.height(8.dp))
 
@@ -262,7 +276,7 @@ fun HomeScreen(
 
 // ─── Top Bar ──────────────────────────────────────────────────────────────────
 @Composable
-private fun HomeTopBar(userName: String) {
+private fun HomeTopBar(userName: String, onLogout: () -> Unit, onShowHistory: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -270,7 +284,7 @@ private fun HomeTopBar(userName: String) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Hola, ${userName.split(" ").firstOrNull() ?: "Usuario"} 👋",
                 style = MaterialTheme.typography.titleLarge,
@@ -285,22 +299,46 @@ private fun HomeTopBar(userName: String) {
             )
         }
 
-        // Avatar
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(listOf(HomeYellow, HomeYellowDark))
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = userName.firstOrNull()?.uppercaseChar()?.toString() ?: "U",
-                fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFF0D0D0D),
-                fontSize = 18.sp
-            )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Historial
+            IconButton(
+                onClick = onShowHistory,
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(HomeCardLight)
+            ) {
+                Icon(Icons.Filled.History, contentDescription = "Historial", tint = HomeYellow, modifier = Modifier.size(22.dp))
+            }
+            
+            // Cerrar Sesión
+            IconButton(
+                onClick = onLogout,
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(HomeCardLight)
+            ) {
+                Icon(Icons.Filled.Logout, contentDescription = "Cerrar Sesión", tint = Color(0xFFFF5252), modifier = Modifier.size(20.dp))
+            }
+
+            // Avatar
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.radialGradient(listOf(HomeYellow, HomeYellowDark))
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = userName.firstOrNull()?.uppercaseChar()?.toString() ?: "U",
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color(0xFF0D0D0D),
+                    fontSize = 18.sp
+                )
+            }
         }
     }
 }

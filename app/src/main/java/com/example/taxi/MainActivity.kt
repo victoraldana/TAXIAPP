@@ -106,6 +106,14 @@ fun TaxiNavGraph() {
             val loggedUser by authViewModel.loggedUser.collectAsState()
             HomeScreen(
                 userName = loggedUser?.fullName ?: loggedUser?.phone ?: "Usuario",
+                clientId = loggedUser?.id ?: "",
+                onLogout = {
+                    sessionManager.clearSession()
+                    authViewModel.logout()
+                    navController.navigate("login") {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
                 onServiceSelected = { serviceId ->
                     when (serviceId) {
                         "trip" -> navController.navigate("client_search")

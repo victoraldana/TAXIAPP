@@ -89,6 +89,27 @@ class TaxiViewModel : ViewModel() {
         sessionToken = AutocompleteSessionToken.newInstance()
     }
 
+    fun initClient(clientId: String) {
+        viewModelScope.launch {
+            try {
+                val res = RetrofitClient.apiService.getActiveTripForClient(clientId)
+                if (res.isSuccessful) {
+                    val trip = res.body()?.data
+                    if (trip != null) {
+                        _tripState.value = TripState.Success(
+                            driver = null, // Se cargará con polling
+                            tripId = trip.tripId,
+                            hasArrived = trip.status == "arrived"
+                        )
+                        startPollingTripStatus(trip.tripId)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("TaxiViewModel", "initClient error: ${e.message}")
+            }
+        }
+    }
+
     fun onMapClick(latLng: LatLng) {
         if (_uiState.value.pickupPoint == null) {
             setPickupPoint(LocationPoint(latLng.latitude, latLng.longitude, "Punto en el mapa"))

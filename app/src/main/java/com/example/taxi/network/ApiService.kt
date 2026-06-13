@@ -137,6 +137,11 @@ interface ApiService {
 
     // ── Historial ─────────────────────────────────────────────────────────────
 
+    @GET("api/admin/trips/client/{clientId}/active")
+    suspend fun getActiveTripForClient(
+        @Path("clientId") clientId: String
+    ): Response<com.example.taxi.model.TripResponse>
+
     @GET("api/admin/trips/client/{clientId}")
     suspend fun getClientTrips(
         @Path("clientId") clientId: String

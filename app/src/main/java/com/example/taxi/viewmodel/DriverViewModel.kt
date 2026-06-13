@@ -261,19 +261,37 @@ class DriverViewModel : ViewModel() {
                         if (res.isSuccessful) {
                             val trip = res.body()?.data
                             if (trip != null) {
-                                _tripState.value = DriverTripState.TripAssigned(
-                                    tripId        = trip.tripId,
-                                    clientName    = trip.clientName ?: "Cliente",
-                                    originAddress = trip.originAddress,
-                                    destAddress   = trip.destAddress,
-                                    distanceKm    = trip.distanceKm,
-                                    estimatedFare = trip.estimatedFare,
-                                    paymentMethod = trip.paymentMethod,
-                                    originLat     = trip.originLat,
-                                    originLng     = trip.originLng,
-                                    destLat       = trip.destLat,
-                                    destLng       = trip.destLng
-                                )
+                                if (trip.status == "pending") {
+                                    _tripState.value = DriverTripState.TripAssigned(
+                                        tripId        = trip.tripId,
+                                        clientName    = trip.clientName ?: "Cliente",
+                                        originAddress = trip.originAddress,
+                                        destAddress   = trip.destAddress,
+                                        distanceKm    = trip.distanceKm,
+                                        estimatedFare = trip.estimatedFare,
+                                        paymentMethod = trip.paymentMethod,
+                                        originLat     = trip.originLat,
+                                        originLng     = trip.originLng,
+                                        destLat       = trip.destLat,
+                                        destLng       = trip.destLng
+                                    )
+                                } else {
+                                    // Restaurar viaje activo
+                                    _tripState.value = DriverTripState.TripActive(
+                                        tripId        = trip.tripId,
+                                        clientName    = trip.clientName ?: "Cliente",
+                                        originAddress = trip.originAddress,
+                                        destAddress   = trip.destAddress,
+                                        distanceKm    = trip.distanceKm,
+                                        estimatedFare = trip.estimatedFare,
+                                        paymentMethod = trip.paymentMethod,
+                                        originLat     = trip.originLat,
+                                        originLng     = trip.originLng,
+                                        destLat       = trip.destLat,
+                                        destLng       = trip.destLng,
+                                        status        = trip.status
+                                    )
+                                }
                                 // Pre-calcular también la ruta origen→destino
                                 fetchRoute(
                                     origin = "${trip.originLat},${trip.originLng}",

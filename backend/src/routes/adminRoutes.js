@@ -1,7 +1,7 @@
 import express from 'express';
 import {
   getDashboard, listDrivers, registerDriver, updateDriver, getDriverLocation,
-  getDriverQueueStatus, updateDriverLocation, getPendingTrip,
+  getDriverQueueStatus, updateDriverLocation, getPendingTrip, getActiveTripForClient,
   getQueue, addToQueue, removeFromQueue, moveInQueue,
   listTrips, assignNextDriver, createTrip, rejectTrip, finishTrip,
   getTripStatus, rateDriver, notifyArrival, acceptTrip,
@@ -13,7 +13,8 @@ const router = express.Router();
 // Dashboard
 router.get('/dashboard', getDashboard);
 
-// Historiales
+// Historiales & Active trips
+router.get('/trips/client/:clientId/active', getActiveTripForClient);
 router.get('/trips/client/:clientId', getClientTrips);
 router.get('/trips/driver/:driverId', getDriverTrips);
 
