@@ -97,10 +97,31 @@
       <h2>Viajes</h2>
       <button class="btn-secondary" onclick="loadTrips()">↻ Actualizar</button>
     </div>
-    <div class="table-wrap">
+    
+    <div class="tabs" style="margin-bottom: 1rem; display: flex; gap: 10px;">
+      <button class="tab-btn active" id="tab-btn-pending" onclick="showTripTab('pending')" style="padding: 8px 16px; border: none; border-bottom: 2px solid #3b82f6; background: transparent; cursor: pointer; font-weight: bold;">Pendientes</button>
+      <button class="tab-btn" id="tab-btn-active" onclick="showTripTab('active')" style="padding: 8px 16px; border: none; border-bottom: 2px solid transparent; background: transparent; cursor: pointer; color: #64748b;">En Proceso</button>
+      <button class="tab-btn" id="tab-btn-completed" onclick="showTripTab('completed')" style="padding: 8px 16px; border: none; border-bottom: 2px solid transparent; background: transparent; cursor: pointer; color: #64748b;">Finalizados</button>
+    </div>
+
+    <div class="table-wrap" id="trips-table-pending">
       <table class="data-table">
         <thead><tr><th>ID</th><th>Cliente</th><th>Conductor</th><th>Unidad</th><th>Origen</th><th>Destino</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
-        <tbody id="tripsBody"></tbody>
+        <tbody id="tripsBodyPending"></tbody>
+      </table>
+    </div>
+
+    <div class="table-wrap" id="trips-table-active" style="display: none;">
+      <table class="data-table">
+        <thead><tr><th>ID</th><th>Cliente</th><th>Conductor</th><th>Unidad</th><th>Origen</th><th>Destino</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
+        <tbody id="tripsBodyActive"></tbody>
+      </table>
+    </div>
+
+    <div class="table-wrap" id="trips-table-completed" style="display: none;">
+      <table class="data-table">
+        <thead><tr><th>ID</th><th>Cliente</th><th>Conductor</th><th>Unidad</th><th>Origen</th><th>Destino</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
+        <tbody id="tripsBodyCompleted"></tbody>
       </table>
     </div>
   </section>

@@ -309,22 +309,47 @@ async function removeFromQueueById(driverId) {
 }
 
 // ─── VIAJES ───────────────────────────────────────────────────────────────────
+function showTripTab(tabName) {
+  // Update buttons
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.remove('active');
+    btn.style.borderBottomColor = 'transparent';
+    btn.style.color = '#64748b';
+  });
+  const activeBtn = document.getElementById('tab-btn-' + tabName);
+  if (activeBtn) {
+    activeBtn.classList.add('active');
+    activeBtn.style.borderBottomColor = '#3b82f6';
+    activeBtn.style.color = 'inherit';
+  }
+
+  // Update tables
+  document.getElementById('trips-table-pending').style.display = 'none';
+  document.getElementById('trips-table-active').style.display = 'none';
+  document.getElementById('trips-table-completed').style.display = 'none';
+  
+  const targetTable = document.getElementById('trips-table-' + tabName);
+  if (targetTable) targetTable.style.display = 'block';
+}
+
 async function loadTrips() {
   try {
     const { data } = await api('/trips');
-    const tbody = document.getElementById('tripsBody');
-    if (!data.length) {
-      tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No hay viajes registrados</td></tr>';
-      return;
-    }
-    tbody.innerHTML = data.map(t => `
+    
+    const pending = data.filter(t => t.status === 'pending');
+    const active = data.filter(t => ['accepted', 'arrived', 'on_route', 'in_progress'].includes(t.status));
+    const completed = data.filter(t => ['completed', 'cancelled', 'cancelled_no_drivers'].includes(t.status));
+
+    const renderRows = (trips, emptyMsg) => {
+      if (!trips.length) return `<tr><td colspan="9" class="empty-state">${emptyMsg}</td></tr>`;
+      return trips.map(t => `
       <tr>
         <td style="font-family:monospace;font-size:11px;color:var(--sub)">${t.id.slice(0,8)}...</td>
         <td style="font-size:13px">${t.client_name||'—'}<br><span style="color:var(--sub);font-size:11px">${t.client_phone||''}</span></td>
         <td style="font-size:13px">${t.driver_name||'<span style="color:var(--sub)">Sin asignar</span>'}</td>
         <td>${t.unit_number ? `<span class="badge badge-yellow">N° ${t.unit_number}</span>` : '—'}</td>
-        <td style="font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.origin_address}</td>
-        <td style="font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.dest_address}</td>
+        <td style="font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.origin_address}">${t.origin_address}</td>
+        <td style="font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.dest_address}">${t.dest_address}</td>
         <td>${tripBadge(t.status)}</td>
         <td style="font-size:12px;color:var(--sub)">${new Date(t.created_at).toLocaleString('es')}</td>
         <td>
@@ -333,6 +358,12 @@ async function loadTrips() {
             : ''}
         </td>
       </tr>`).join('');
+    };
+
+    document.getElementById('tripsBodyPending').innerHTML = renderRows(pending, 'No hay viajes pendientes');
+    document.getElementById('tripsBodyActive').innerHTML = renderRows(active, 'No hay viajes en proceso');
+    document.getElementById('tripsBodyCompleted').innerHTML = renderRows(completed, 'No hay viajes finalizados');
+
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -348,12 +379,14 @@ async function assignDriver(tripId) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function tripBadge(status) {
   const map = {
-    pending:     ['badge-yellow', 'Pendiente'],
-    accepted:    ['badge-blue',   'Aceptado'],
-    on_route:    ['badge-blue',   'En ruta'],
-    in_progress: ['badge-green',  'En curso'],
-    completed:   ['badge-gray',   'Completado'],
-    cancelled:   ['badge-red',    'Cancelado'],
+    pending:              ['badge-yellow', 'Pendiente'],
+    accepted:             ['badge-blue',   'Aceptado'],
+    arrived:              ['badge-blue',   'Llegó'],
+    on_route:             ['badge-blue',   'En ruta'],
+    in_progress:          ['badge-green',  'En curso'],
+    completed:            ['badge-gray',   'Completado'],
+    cancelled:            ['badge-red',    'Cancelado'],
+    cancelled_no_drivers: ['badge-red',    'Sin conductor'],
   };
   const [cls, label] = map[status] || ['badge-gray', status];
   return `<span class="badge ${cls}">${label}</span>`;
