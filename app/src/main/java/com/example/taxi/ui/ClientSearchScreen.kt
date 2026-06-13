@@ -283,7 +283,7 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
 
     BottomSheetScaffold(
         scaffoldState = sheetState,
-        sheetPeekHeight = if (mapSelectionMode != null) 0.dp else if (isImeVisible) screenHeight else if (isTripActive) 450.dp else if (hasRoute) 260.dp else 200.dp,
+        sheetPeekHeight = if (mapSelectionMode != null) 0.dp else if (isImeVisible) screenHeight else if (isTripActive || hasRoute) 450.dp else 200.dp,
         sheetDragHandle = {
             Box(
                 modifier = Modifier
