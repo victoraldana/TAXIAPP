@@ -50,6 +50,7 @@ sealed class TripState {
     object Idle    : TripState()
     object Loading : TripState()
     data class Success(val driver: DriverData?, val tripId: String) : TripState()
+    data class Completed(val tripId: String, val driverName: String?) : TripState()
     data class Error(val message: String) : TripState()
 }
 
@@ -64,6 +65,7 @@ class TaxiViewModel : ViewModel() {
     val driverLocation: StateFlow<LatLng?> = _driverLocation.asStateFlow()
     
     private var locationPollingJob: Job? = null
+    private var tripStatusPollingJob: Job? = null
 
     private var placesClient: PlacesClient? = null
     private var sessionToken: AutocompleteSessionToken? = null
@@ -275,6 +277,11 @@ class TaxiViewModel : ViewModel() {
                     data?.driver?.id?.let { dId ->
                         startPollingLocation(dId)
                     }
+                    // Start polling trip status to detect completion
+                    data?.tripId?.let { tId ->
+                        val driverName = data.driver?.fullName
+                        startPollingTripStatus(tId, driverName)
+                    }
                 } else {
                     val msg = response.body()?.message ?: "Error al confirmar el viaje"
                     _tripState.value = TripState.Error(msg)
@@ -306,11 +313,54 @@ class TaxiViewModel : ViewModel() {
         }
     }
 
+    private fun startPollingTripStatus(tripId: String, driverName: String?) {
+        tripStatusPollingJob?.cancel()
+        tripStatusPollingJob = viewModelScope.launch {
+            while (true) {
+                delay(5000)
+                try {
+                    val res = RetrofitClient.apiService.getTripStatus(tripId)
+                    if (res.isSuccessful) {
+                        val status = res.body()?.data?.status
+                        if (status == "completed") {
+                            locationPollingJob?.cancel()
+                            _driverLocation.value = null
+                            _tripState.value = TripState.Completed(
+                                tripId     = tripId,
+                                driverName = res.body()?.data?.driverName ?: driverName
+                            )
+                            break
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("TaxiViewModel", "Error polling trip status: ${e.message}")
+                }
+            }
+        }
+    }
+
+    fun rateDriver(tripId: String, rating: Int, comment: String? = null, onDone: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                RetrofitClient.apiService.rateDriver(
+                    tripId,
+                    com.example.taxi.model.RatingRequest(rating, comment)
+                )
+            } catch (e: Exception) {
+                Log.e("TaxiViewModel", "rateDriver error: ${e.message}")
+            } finally {
+                onDone()
+            }
+        }
+    }
+
     fun resetTrip() {
         locationPollingJob?.cancel()
-        locationPollingJob = null
+        tripStatusPollingJob?.cancel()
+        locationPollingJob    = null
+        tripStatusPollingJob  = null
         _driverLocation.value = null
-        _tripState.value = TripState.Idle
-        _uiState.value = TaxiUiState()
+        _tripState.value      = TripState.Idle
+        _uiState.value        = TaxiUiState()
     }
 }

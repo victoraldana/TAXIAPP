@@ -53,3 +53,28 @@ data class LocationData(
     val lat: Double,
     val lng: Double
 )
+
+// ─── Trip status (cliente hace polling) ──────────────────────────────────────
+data class TripStatusResponse(
+    val success: Boolean,
+    val data: TripStatusData? = null
+)
+
+data class TripStatusData(
+    val id: String,
+    val status: String,          // "pending" | "accepted" | "completed" | "cancelled"
+    @SerializedName("driver_name")   val driverName: String?,
+    @SerializedName("driver_rating") val driverRating: Double?
+)
+
+// ─── Calificación del conductor ───────────────────────────────────────────────
+data class RatingRequest(
+    val rating: Int,
+    val comment: String? = null
+)
+
+data class RatingResponse(
+    val success: Boolean,
+    val message: String
+)
+

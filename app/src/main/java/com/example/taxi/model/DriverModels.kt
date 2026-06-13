@@ -32,6 +32,10 @@ data class DriverTripInfo(
     @SerializedName("client_name")     val clientName: String?,
     @SerializedName("origin_address")  val originAddress: String,
     @SerializedName("dest_address")    val destAddress: String,
+    @SerializedName("origin_lat")      val originLat: Double = 0.0,
+    @SerializedName("origin_lng")      val originLng: Double = 0.0,
+    @SerializedName("dest_lat")        val destLat: Double = 0.0,
+    @SerializedName("dest_lng")        val destLng: Double = 0.0,
     @SerializedName("distance_km")     val distanceKm: Double?,
     @SerializedName("estimated_fare")  val estimatedFare: Double?,
     val status: String

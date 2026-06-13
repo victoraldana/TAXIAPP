@@ -506,6 +506,7 @@ export const getPendingTrip = async (req, res) => {
   try {
     const result = await query(`
       SELECT t.id AS trip_id, t.origin_address, t.dest_address,
+             t.origin_lat, t.origin_lng, t.dest_lat, t.dest_lng,
              t.distance_km, t.estimated_fare, t.status,
              uc.full_name AS client_name
       FROM trips t
@@ -565,4 +566,71 @@ export const finishTrip = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+// ──────────────────────────────────────────────────────────────────────────────
+// VIAJES — obtener estado (cliente hace polling para detectar finalización)
+// ──────────────────────────────────────────────────────────────────────────────
+export const getTripStatus = async (req, res) => {
+  const { tripId } = req.params;
+  try {
+    const result = await query(
+      `SELECT t.id, t.status, t.driver_id,
+              ud.full_name AS driver_name,
+              dp.rating AS driver_rating
+       FROM trips t
+       LEFT JOIN users ud ON t.driver_id = ud.id
+       LEFT JOIN driver_profiles dp ON dp.user_id = t.driver_id
+       WHERE t.id = $1`,
+      [tripId]
+    );
+    if (result.rows.length === 0)
+      return res.status(404).json({ success: false, message: 'Viaje no encontrado.' });
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    console.error('getTripStatus:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CALIFICACIÓN — cliente califica al conductor
+// ──────────────────────────────────────────────────────────────────────────────
+export const rateDriver = async (req, res) => {
+  const { tripId } = req.params;
+  const { rating, comment } = req.body;
+
+  if (!rating || rating < 1 || rating > 5)
+    return res.status(400).json({ success: false, message: 'La calificación debe ser entre 1 y 5.' });
+
+  try {
+    // Guardar rating en el viaje
+    const tripRes = await query(
+      `UPDATE trips SET client_rating=$1, client_comment=$2 WHERE id=$3 RETURNING driver_id`,
+      [rating, comment || null, tripId]
+    );
+    if (tripRes.rows.length === 0)
+      return res.status(404).json({ success: false, message: 'Viaje no encontrado.' });
+
+    // Actualizar promedio del conductor
+    const driverId = tripRes.rows[0].driver_id;
+    if (driverId) {
+      await query(
+        `UPDATE driver_profiles
+         SET rating = (
+           SELECT ROUND(AVG(client_rating)::numeric, 2)
+           FROM trips WHERE driver_id=$1 AND client_rating IS NOT NULL
+         )
+         WHERE user_id=$1`,
+        [driverId]
+      );
+    }
+
+    res.json({ success: true, message: '¡Gracias por tu calificación!' });
+  } catch (err) {
+    console.error('rateDriver:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 

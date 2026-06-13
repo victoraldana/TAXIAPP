@@ -108,12 +108,38 @@ fun DriverHomeScreen(
             .background(DrvDark)
     ) {
         // ── MAPA ──────────────────────────────────────────────────────────────
+        val driverToOriginRoute by viewModel.driverToOriginRoute.collectAsState()
+        val originToDestRoute   by viewModel.originToDestRoute.collectAsState()
+
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraState,
             properties = MapProperties(isMyLocationEnabled = locationGranted),
             uiSettings = MapUiSettings(zoomControlsEnabled = false, myLocationButtonEnabled = false, compassEnabled = true)
-        )
+        ) {
+            // Ruta conductor → origen (azul)
+            if (driverToOriginRoute.isNotEmpty()) {
+                Polyline(points = driverToOriginRoute, color = DrvBlue, width = 12f, geodesic = true)
+                Polyline(points = driverToOriginRoute, color = DrvBlue.copy(alpha = 0.2f), width = 22f, geodesic = true)
+            }
+            // Ruta origen → destino (amarillo)
+            if (originToDestRoute.isNotEmpty()) {
+                Polyline(points = originToDestRoute, color = DrvYellow, width = 12f, geodesic = true)
+                Polyline(points = originToDestRoute, color = DrvYellow.copy(alpha = 0.2f), width = 22f, geodesic = true)
+            }
+            // Ajustar cámara cuando hay rutas
+            LaunchedEffect(originToDestRoute, driverToOriginRoute) {
+                val activeRoute = if (driverToOriginRoute.isNotEmpty()) driverToOriginRoute
+                                  else if (originToDestRoute.isNotEmpty()) originToDestRoute
+                                  else return@LaunchedEffect
+                if (activeRoute.size >= 2) {
+                    val bounds = com.google.android.gms.maps.model.LatLngBounds.builder()
+                        .also { b -> activeRoute.forEach { b.include(it) } }
+                        .build()
+                    cameraState.animate(CameraUpdateFactory.newLatLngBounds(bounds, 120), 900)
+                }
+            }
+        }
 
         // ── BARRA SUPERIOR ────────────────────────────────────────────────────
         TopBar(
@@ -144,7 +170,19 @@ fun DriverHomeScreen(
                 )
                 is DriverTripState.TripAssigned -> TripIncomingPanel(
                     trip = state,
-                    onAccept = { viewModel.acceptTrip(state.tripId) },
+                    onAccept = {
+                        // Obtener ubicación actual del conductor para calcular ruta y pasarla
+                        if (locationGranted) {
+                            fusedClient.lastLocation.addOnSuccessListener { loc ->
+                                val lat = loc?.latitude ?: 0.0
+                                val lng = loc?.longitude ?: 0.0
+                                viewModel.calculateDriverToOrigin(lat, lng, state.originLat, state.originLng)
+                                viewModel.acceptTrip(state.tripId, lat, lng)
+                            }
+                        } else {
+                            viewModel.acceptTrip(state.tripId, 0.0, 0.0)
+                        }
+                    },
                     onReject = { viewModel.rejectTrip(state.tripId, driver.id) }
                 )
                 is DriverTripState.TripActive -> TripActivePanel(

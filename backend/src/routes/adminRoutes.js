@@ -4,6 +4,7 @@ import {
   getDriverQueueStatus, updateDriverLocation, getPendingTrip,
   getQueue, addToQueue, removeFromQueue, moveInQueue,
   listTrips, assignNextDriver, createTrip, rejectTrip, finishTrip,
+  getTripStatus, rateDriver,
 } from '../controllers/adminController.js';
 
 const router = express.Router();
@@ -34,6 +35,8 @@ router.post('/trips',                         createTrip);
 router.post('/trips/:trip_id/assign',         assignNextDriver);
 router.patch('/trips/:tripId/reject',         rejectTrip);             // conductor rechaza
 router.patch('/trips/:tripId/finish',         finishTrip);             // conductor finaliza
+router.get('/trips/:tripId/status',           getTripStatus);          // cliente polling
+router.post('/trips/:tripId/rate',            rateDriver);             // cliente califica
 
 export default router;
 

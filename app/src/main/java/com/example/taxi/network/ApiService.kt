@@ -113,5 +113,16 @@ interface ApiService {
     suspend fun finishTrip(
         @Path("tripId") tripId: String
     ): Response<AuthModels.SimpleResponse>
+
+    @GET("api/admin/trips/{tripId}/status")
+    suspend fun getTripStatus(
+        @Path("tripId") tripId: String
+    ): Response<com.example.taxi.model.TripStatusResponse>
+
+    @POST("api/admin/trips/{tripId}/rate")
+    suspend fun rateDriver(
+        @Path("tripId") tripId: String,
+        @Body request: com.example.taxi.model.RatingRequest
+    ): Response<com.example.taxi.model.RatingResponse>
 }
 

@@ -98,8 +98,13 @@ fun TaxiNavGraph() {
         composable("client_search") {
             val loggedUser by authViewModel.loggedUser.collectAsState()
             ClientSearchScreen(
-                viewModel = taxiViewModel,
-                clientId = loggedUser?.id ?: ""
+                viewModel      = taxiViewModel,
+                clientId       = loggedUser?.id ?: "",
+                onTripFinished = {
+                    navController.navigate("home") {
+                        popUpTo("client_search") { inclusive = true }
+                    }
+                }
             )
         }
 

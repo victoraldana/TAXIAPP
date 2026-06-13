@@ -61,13 +61,33 @@ private val MapBlue      = Color(0xFF4FC3F7)
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
 @Composable
-fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String) {
+fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinished: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
     val tripState by viewModel.tripState.collectAsState()
 
     val context = LocalContext.current
 
-    // ── Si el viaje fue asignado y no hay conductor, reseteamos la demo ─────────
+    // ── Pantalla de calificación cuando el viaje se completó ──────────────────
+    if (tripState is TripState.Completed) {
+        val state = tripState as TripState.Completed
+        RatingScreen(
+            driverName  = state.driverName,
+            tripId      = state.tripId,
+            onRatingSubmitted = { rating, comment ->
+                viewModel.rateDriver(state.tripId, rating, comment) {
+                    viewModel.resetTrip()
+                    onTripFinished()
+                }
+            },
+            onSkip = {
+                viewModel.resetTrip()
+                onTripFinished()
+            }
+        )
+        return
+    }
+
+    // ── Errores y sin conductor disponible ────────────────────────────────────
     LaunchedEffect(tripState) {
         when (val state = tripState) {
             is TripState.Success -> {

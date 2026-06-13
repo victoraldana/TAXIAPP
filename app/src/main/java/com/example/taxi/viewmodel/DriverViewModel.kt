@@ -3,13 +3,19 @@ package com.example.taxi.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.taxi.BuildConfig
 import com.example.taxi.model.DriverTripInfo
+import com.example.taxi.model.DirectionsService
+import com.example.taxi.model.decodePolyline
 import com.example.taxi.network.RetrofitClient
+import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 
 // ─── Estados del viaje para el conductor ─────────────────────────────────────
 sealed class DriverTripState {
@@ -21,7 +27,11 @@ sealed class DriverTripState {
         val originAddress: String,
         val destAddress: String,
         val distanceKm: Double?,
-        val estimatedFare: Double?
+        val estimatedFare: Double?,
+        val originLat: Double = 0.0,
+        val originLng: Double = 0.0,
+        val destLat: Double = 0.0,
+        val destLng: Double = 0.0
     ) : DriverTripState()
 
     data class TripActive(
@@ -29,7 +39,11 @@ sealed class DriverTripState {
         val clientName: String,
         val originAddress: String,
         val destAddress: String,
-        val distanceKm: Double?
+        val distanceKm: Double?,
+        val originLat: Double = 0.0,
+        val originLng: Double = 0.0,
+        val destLat: Double = 0.0,
+        val destLng: Double = 0.0
     ) : DriverTripState()
 }
 
@@ -43,6 +57,19 @@ class DriverViewModel : ViewModel() {
 
     private val _queuePosition = MutableStateFlow<Int?>(null)
     val queuePosition: StateFlow<Int?> = _queuePosition.asStateFlow()
+
+    // ── Rutas del conductor en el mapa ────────────────────────────────────────
+    private val _driverToOriginRoute = MutableStateFlow<List<LatLng>>(emptyList())
+    val driverToOriginRoute: StateFlow<List<LatLng>> = _driverToOriginRoute.asStateFlow()
+
+    private val _originToDestRoute = MutableStateFlow<List<LatLng>>(emptyList())
+    val originToDestRoute: StateFlow<List<LatLng>> = _originToDestRoute.asStateFlow()
+
+    private val directionsService = Retrofit.Builder()
+        .baseUrl("https://maps.googleapis.com/")
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+        .create(DirectionsService::class.java)
 
     private var pollingActive = false
 
@@ -102,15 +129,28 @@ class DriverViewModel : ViewModel() {
     }
 
     // ── Aceptar viaje ─────────────────────────────────────────────────────────
-    fun acceptTrip(tripId: String) {
+    fun acceptTrip(tripId: String, driverLat: Double, driverLng: Double) {
         val current = _tripState.value
         if (current is DriverTripState.TripAssigned) {
+            // Calcular ruta origen → destino
+            fetchRoute(
+                origin = "${current.originLat},${current.originLng}",
+                dest   = "${current.destLat},${current.destLng}",
+                forDriverLeg = false
+            )
+            // Limpiar ruta conductor → origen
+            _driverToOriginRoute.value = emptyList()
+
             _tripState.value = DriverTripState.TripActive(
                 tripId        = current.tripId,
                 clientName    = current.clientName,
                 originAddress = current.originAddress,
                 destAddress   = current.destAddress,
-                distanceKm    = current.distanceKm
+                distanceKm    = current.distanceKm,
+                originLat     = current.originLat,
+                originLng     = current.originLng,
+                destLat       = current.destLat,
+                destLng       = current.destLng
             )
         }
     }
@@ -140,8 +180,41 @@ class DriverViewModel : ViewModel() {
             } catch (e: Exception) {
                 Log.e("DriverViewModel", "finishTrip error: ${e.message}")
             }
-            _tripState.value = DriverTripState.Idle
+            _driverToOriginRoute.value = emptyList()
+            _originToDestRoute.value   = emptyList()
+            _tripState.value           = DriverTripState.Idle
         }
+    }
+
+    // ── Calcular ruta via Directions API ─────────────────────────────────────
+    private fun fetchRoute(origin: String, dest: String, forDriverLeg: Boolean) {
+        val apiKey = BuildConfig.MAPS_API_KEY
+        directionsService.getDirections(origin, dest, apiKey)
+            .enqueue(object : retrofit2.Callback<com.example.taxi.model.DirectionsResponse> {
+                override fun onResponse(
+                    call: retrofit2.Call<com.example.taxi.model.DirectionsResponse>,
+                    response: retrofit2.Response<com.example.taxi.model.DirectionsResponse>
+                ) {
+                    val points = response.body()?.routes?.firstOrNull()?.overview_polyline?.points
+                    if (points != null) {
+                        val decoded = decodePolyline(points)
+                        if (forDriverLeg) _driverToOriginRoute.value = decoded
+                        else             _originToDestRoute.value   = decoded
+                    }
+                }
+                override fun onFailure(call: retrofit2.Call<com.example.taxi.model.DirectionsResponse>, t: Throwable) {
+                    Log.e("DriverViewModel", "fetchRoute error: ${t.message}")
+                }
+            })
+    }
+
+    // ── Calcular ruta conductor → origen cuando llega un viaje ────────────────
+    fun calculateDriverToOrigin(driverLat: Double, driverLng: Double, originLat: Double, originLng: Double) {
+        fetchRoute(
+            origin = "$driverLat,$driverLng",
+            dest   = "$originLat,$originLng",
+            forDriverLeg = true
+        )
     }
 
     // ── Polling: verificar si hay viaje asignado ──────────────────────────────
@@ -162,7 +235,17 @@ class DriverViewModel : ViewModel() {
                                     originAddress = trip.originAddress,
                                     destAddress   = trip.destAddress,
                                     distanceKm    = trip.distanceKm,
-                                    estimatedFare = trip.estimatedFare
+                                    estimatedFare = trip.estimatedFare,
+                                    originLat     = trip.originLat,
+                                    originLng     = trip.originLng,
+                                    destLat       = trip.destLat,
+                                    destLng       = trip.destLng
+                                )
+                                // Pre-calcular también la ruta origen→destino
+                                fetchRoute(
+                                    origin = "${trip.originLat},${trip.originLng}",
+                                    dest   = "${trip.destLat},${trip.destLng}",
+                                    forDriverLeg = false
                                 )
                             }
                             // Actualizar posición en cola
