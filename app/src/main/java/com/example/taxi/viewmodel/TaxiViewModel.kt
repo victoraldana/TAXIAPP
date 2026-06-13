@@ -245,7 +245,7 @@ class TaxiViewModel : ViewModel() {
     }
 
     // ── Confirmar viaje → backend ─────────────────────────────────────────────
-    fun confirmTrip(clientId: String) {
+    fun confirmTrip(clientId: String, paymentMethod: String) {
         val pickup = _uiState.value.pickupPoint ?: return
         val dest   = _uiState.value.destinationPoint ?: return
 
@@ -263,6 +263,7 @@ class TaxiViewModel : ViewModel() {
                     destLng       = dest.longitude,
                     distanceKm    = _uiState.value.travelDistance
                         ?.replace(Regex("[^0-9.]"), "")?.toDoubleOrNull(),
+                    paymentMethod = paymentMethod
                 )
 
                 val response = RetrofitClient.apiService.createTrip(request)

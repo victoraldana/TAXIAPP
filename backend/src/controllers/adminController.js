@@ -508,7 +508,7 @@ export const getPendingTrip = async (req, res) => {
     const result = await query(`
       SELECT t.id AS trip_id, t.origin_address, t.dest_address,
              t.origin_lat, t.origin_lng, t.dest_lat, t.dest_lng,
-             t.distance_km, t.estimated_fare, t.status,
+             t.distance_km, t.estimated_fare, t.status, t.payment_method,
              uc.full_name AS client_name
       FROM trips t
       LEFT JOIN users uc ON t.client_id = uc.id

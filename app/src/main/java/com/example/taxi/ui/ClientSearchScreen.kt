@@ -305,8 +305,8 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
                         permLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                     }
                 },
-                onConfirm = { 
-                    if (hasRoute) viewModel.confirmTrip(clientId)
+                onConfirm = { paymentMethod -> 
+                    if (hasRoute) viewModel.confirmTrip(clientId, paymentMethod)
                 },
                 onCancelTrip = { viewModel.resetTrip() }
             )
@@ -477,6 +477,7 @@ private fun RoutePointRow(
 }
 
 // ─── Contenido del Bottom Sheet ───────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BottomSheetContent(
     uiState: TaxiUiState,
@@ -487,7 +488,7 @@ private fun BottomSheetContent(
     onPickupPredictionSelect: (PlacePrediction) -> Unit,
     onDestinationPredictionSelect: (PlacePrediction) -> Unit,
     onUseMyLocation: () -> Unit,
-    onConfirm: () -> Unit,
+    onConfirm: (String) -> Unit,
     onCancelTrip: () -> Unit
 ) {
     val context = LocalContext.current
@@ -655,10 +656,60 @@ private fun BottomSheetContent(
             }
         }
 
+        // ── Selección de método de pago ───────────────────────────────────────
+        var selectedPaymentMethod by remember { mutableStateOf("Efectivo Bs") }
+        val paymentMethods = listOf("Pago móvil", "Efectivo Bs", "Transferencia", "Divisas", "Otros")
+        var expandedPayment by remember { mutableStateOf(false) }
+
+        AnimatedVisibility(
+            visible = hasRoute,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            ExposedDropdownMenuBox(
+                expanded = expandedPayment,
+                onExpandedChange = { expandedPayment = !expandedPayment },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = selectedPaymentMethod,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Método de pago", color = MapSubText) },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedPayment) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MapYellow,
+                        unfocusedBorderColor = MapBorder,
+                        focusedTextColor = MapText,
+                        unfocusedTextColor = MapText,
+                        focusedContainerColor = MapCardLight,
+                        unfocusedContainerColor = MapCardLight
+                    ),
+                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp)
+                )
+                ExposedDropdownMenu(
+                    expanded = expandedPayment,
+                    onDismissRequest = { expandedPayment = false },
+                    modifier = Modifier.background(MapCardLight)
+                ) {
+                    paymentMethods.forEach { selectionOption ->
+                        DropdownMenuItem(
+                            text = { Text(selectionOption, color = MapText) },
+                            onClick = {
+                                selectedPaymentMethod = selectionOption
+                                expandedPayment = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
         // ── Botón confirmar ───────────────────────────────────────────────────
         val isLoading = tripState is TripState.Loading
         Button(
-            onClick = onConfirm,
+            onClick = { onConfirm(selectedPaymentMethod) },
             enabled = canSearch && !isLoading,
             modifier = Modifier
                 .fillMaxWidth()

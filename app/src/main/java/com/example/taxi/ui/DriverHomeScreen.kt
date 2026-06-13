@@ -408,7 +408,7 @@ private fun IdlePanel(isOnline: Boolean, queuePos: Int?, onToggle: () -> Unit) {
                 ) {
                     Icon(Icons.Filled.Logout, null, tint = DrvRed, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Tengo Viaje Externo (Salir de Cola)", color = DrvRed, fontWeight = FontWeight.Bold)
+                    Text("Salir de Cola (Viaje Externo)", color = DrvRed, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -463,7 +463,7 @@ private fun TripIncomingPanel(
         // Origen - Destino
         TripRouteCard(origin = trip.originAddress, dest = trip.destAddress, distance = trip.distanceKm)
 
-        // Precio estimado
+        // Precio estimado y método de pago
         Row(
             modifier = Modifier.fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
@@ -473,9 +473,15 @@ private fun TripIncomingPanel(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Filled.AttachMoney, null, tint = DrvGreen, modifier = Modifier.size(20.dp))
-                Text("Ingreso estimado", color = DrvSub, fontSize = 13.sp)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Filled.AttachMoney, null, tint = DrvGreen, modifier = Modifier.size(20.dp))
+                    Text("Ingreso estimado", color = DrvSub, fontSize = 13.sp)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Filled.Payments, null, tint = DrvYellow, modifier = Modifier.size(20.dp))
+                    Text(trip.paymentMethod ?: "Efectivo Bs", color = DrvText, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
             }
             Text(
                 trip.estimatedFare?.let { "$${"%.2f".format(it)}" } ?: "Acordar",
@@ -555,6 +561,26 @@ private fun TripActivePanel(
         }
 
         TripRouteCard(origin = trip.originAddress, dest = trip.destAddress, distance = trip.distanceKm)
+
+        // Método de pago
+        Row(
+            modifier = Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(DrvCard.copy(alpha=0.5f))
+                .border(1.dp, DrvBorder, RoundedCornerShape(12.dp))
+                .padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Filled.Payments, null, tint = DrvYellow, modifier = Modifier.size(20.dp))
+                Text("Método de pago", color = DrvSub, fontSize = 13.sp)
+            }
+            Text(
+                trip.paymentMethod ?: "Efectivo Bs",
+                fontWeight = FontWeight.Bold, fontSize = 14.sp, color = DrvText
+            )
+        }
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             // Botón Avisar Llegada (si no ha llegado)

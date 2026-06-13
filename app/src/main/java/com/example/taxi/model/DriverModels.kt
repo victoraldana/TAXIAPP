@@ -38,5 +38,6 @@ data class DriverTripInfo(
     @SerializedName("dest_lng")        val destLng: Double = 0.0,
     @SerializedName("distance_km")     val distanceKm: Double?,
     @SerializedName("estimated_fare")  val estimatedFare: Double?,
+    @SerializedName("payment_method")  val paymentMethod: String? = null,
     val status: String
 )
