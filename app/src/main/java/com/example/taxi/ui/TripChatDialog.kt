@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -59,11 +60,15 @@ fun TripChatDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
     ) {
         Surface(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
                 .padding(top = 40.dp),
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
             color = ChatDark
@@ -85,8 +90,13 @@ fun TripChatDialog(
 
                 HorizontalDivider(color = Color.DarkGray)
 
-                // Messages List
+                // Messages List — tiene su propio scroll, NO se desplaza con el teclado
+                val listState = rememberLazyListState()
+                LaunchedEffect(messages.size) {
+                    if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
+                }
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .weight(1f)
                         .padding(horizontal = 16.dp),
@@ -114,22 +124,33 @@ fun TripChatDialog(
                                     .background(if (isMe) ChatBubbleMe else ChatBubbleOther)
                                     .padding(12.dp)
                             ) {
-                                Text(
-                                    text = msg.message,
-                                    color = if (isMe) ChatTextMe else ChatTextOther,
-                                    fontSize = 15.sp
-                                )
+                                Column {
+                                    if (!isMe && msg.senderName != null) {
+                                        Text(
+                                            text = msg.senderName,
+                                            color = ChatBubbleMe,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    Text(
+                                        text = msg.message,
+                                        color = if (isMe) ChatTextMe else ChatTextOther,
+                                        fontSize = 15.sp
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
-                // Input Box
+                // Input Box — imePadding() SOLO aquí para que suba con el teclado
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(Color(0xFF0F1923))
-                        .padding(12.dp)
+                        .imePadding()
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
                         .navigationBarsPadding(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -144,7 +165,8 @@ fun TripChatDialog(
                             focusedBorderColor = ChatBubbleMe,
                             unfocusedBorderColor = Color.DarkGray
                         ),
-                        shape = RoundedCornerShape(20.dp)
+                        shape = RoundedCornerShape(20.dp),
+                        maxLines = 3
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     IconButton(

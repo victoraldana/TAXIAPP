@@ -286,13 +286,22 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
     val hasDestination = uiState.destinationPoint != null
     val hasPickup = uiState.pickupPoint != null
     val isTripActive = tripState is TripState.Success && (tripState as TripState.Success).driver != null
+    // Cualquier estado activo (esperando o en viaje) bloquea el flujo de búsqueda
+    val isInActiveTrip = tripState is TripState.Success || tripState is TripState.Loading
 
     val isImeVisible = WindowInsets.isImeVisible
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
 
+    // Auto-expandir el bottom sheet cuando el cliente tiene un viaje activo
+    LaunchedEffect(isInActiveTrip) {
+        if (isInActiveTrip) {
+            sheetState.bottomSheetState.expand()
+        }
+    }
+
     BottomSheetScaffold(
         scaffoldState = sheetState,
-        sheetPeekHeight = if (mapSelectionMode != null) 0.dp else if (isImeVisible) screenHeight else if (isTripActive || hasRoute) 450.dp else 200.dp,
+        sheetPeekHeight = if (mapSelectionMode != null) 0.dp else if (isImeVisible) screenHeight else if (isInActiveTrip || hasRoute) 450.dp else 200.dp,
         sheetDragHandle = {
             Box(
                 modifier = Modifier
@@ -359,9 +368,12 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
                 uiSettings = MapUiSettings(
                     zoomControlsEnabled = false,
                     myLocationButtonEnabled = false,
-                    compassEnabled = true
+                    compassEnabled = true,
+                    scrollGesturesEnabled = !isInActiveTrip,
+                    zoomGesturesEnabled = !isInActiveTrip,
+                    tiltGesturesEnabled = !isInActiveTrip
                 ),
-                onMapClick = { viewModel.onMapClick(it) }
+                onMapClick = { if (!isInActiveTrip) viewModel.onMapClick(it) }
             ) {
                 // Marcador origen
                 uiState.pickupPoint?.let { pt ->

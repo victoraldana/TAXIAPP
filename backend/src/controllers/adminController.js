@@ -519,17 +519,18 @@ export const getPendingTrip = async (req, res) => {
 };
 
 export const getActiveTripForClient = async (req, res) => {
-  const { id } = req.params; // client_id
+  const { clientId } = req.params;
   try {
     const result = await query(`
       SELECT t.id AS trip_id, t.origin_address, t.dest_address,
              t.origin_lat, t.origin_lng, t.dest_lat, t.dest_lng,
-             t.distance_km, t.estimated_fare, t.status, t.payment_method
+             t.distance_km, t.estimated_fare, t.status, t.payment_method,
+             t.driver_id
       FROM trips t
       WHERE t.client_id = $1 AND t.status IN ('pending', 'accepted', 'arrived', 'on_route', 'in_progress')
       ORDER BY t.created_at DESC
       LIMIT 1
-    `, [id]);
+    `, [clientId]);
 
     if (result.rows.length === 0)
       return res.json({ success: true, data: null });
