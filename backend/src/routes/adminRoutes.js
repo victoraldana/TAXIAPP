@@ -5,7 +5,7 @@ import {
   getQueue, addToQueue, removeFromQueue, moveInQueue,
   listTrips, assignNextDriver, createTrip, rejectTrip, finishTrip,
   getTripStatus, rateDriver, notifyArrival, acceptTrip,
-  getClientTrips, getDriverTrips
+  getClientTrips, getDriverTrips, getTripMessages, addTripMessage
 } from '../controllers/adminController.js';
 
 const router = express.Router();
@@ -45,6 +45,10 @@ router.patch('/trips/:tripId/arrive',         notifyArrival);          // conduc
 router.get('/trips/:tripId/status',           getTripStatus);          // cliente polling
 router.post('/trips/:tripId/rate',            rateDriver);             // cliente califica
 router.patch('/trips/:tripId/accept',         acceptTrip);             // conductor acepta
+
+// Chat de viajes
+router.get('/trips/:tripId/messages',         getTripMessages);
+router.post('/trips/:tripId/messages',        addTripMessage);
 
 export default router;
 

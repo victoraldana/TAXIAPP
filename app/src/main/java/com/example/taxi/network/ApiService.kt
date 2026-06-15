@@ -137,6 +137,18 @@ interface ApiService {
 
     // ── Historial ─────────────────────────────────────────────────────────────
 
+    // ── Chat de Viajes ────────────────────────────────────────────────────────
+    @GET("api/admin/trips/{tripId}/messages")
+    suspend fun getTripMessages(
+        @Path("tripId") tripId: String
+    ): Response<com.example.taxi.model.ChatHistoryResponse>
+
+    @POST("api/admin/trips/{tripId}/messages")
+    suspend fun sendTripMessage(
+        @Path("tripId") tripId: String,
+        @Body request: com.example.taxi.model.ChatMessageRequest
+    ): Response<com.example.taxi.model.ChatMessageResponse>
+
     @GET("api/admin/trips/client/{clientId}/active")
     suspend fun getActiveTripForClient(
         @Path("clientId") clientId: String

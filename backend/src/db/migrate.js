@@ -214,6 +214,14 @@ CREATE TABLE IF NOT EXISTS driver_queue (
 );
 CREATE INDEX IF NOT EXISTS idx_queue_active ON driver_queue(is_active, queue_position);
 CREATE INDEX IF NOT EXISTS idx_queue_driver ON driver_queue(driver_id);
+CREATE TABLE IF NOT EXISTS trip_messages (
+    id             UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    trip_id        UUID         NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+    sender_id      UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    message        TEXT         NOT NULL,
+    created_at     TIMESTAMPTZ  DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_trip_msgs ON trip_messages(trip_id, created_at);
 `;
 
 // ============================================================

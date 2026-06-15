@@ -147,6 +147,7 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
     var hasAnnouncedArrival by remember { mutableStateOf(false) }
     var hasAnnouncedAssigned by remember { mutableStateOf(false) }
     var showArrivalDialog by remember { mutableStateOf(false) }
+    var showChatDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(clientId) {
         viewModel.initClient(clientId)
@@ -211,6 +212,14 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
             containerColor = MapCard,
             titleContentColor = MapText,
             textContentColor = MapSubText
+        )
+    }
+
+    if (showChatDialog && tripState is TripState.Success) {
+        TripChatDialog(
+            tripId = (tripState as TripState.Success).tripId,
+            currentUserId = clientId,
+            onDismiss = { showChatDialog = false }
         )
     }
 
@@ -329,7 +338,8 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
                 onConfirm = { paymentMethod -> 
                     if (hasRoute) viewModel.confirmTrip(clientId, paymentMethod)
                 },
-                onCancelTrip = { viewModel.resetTrip() }
+                onCancelTrip = { viewModel.resetTrip() },
+                onChat = { showChatDialog = true }
             )
         }
     ) { innerPadding ->
@@ -556,7 +566,8 @@ private fun BottomSheetContent(
     onSelectOnMap: (MapSelectionMode) -> Unit,
     onUseMyLocation: () -> Unit,
     onConfirm: (String) -> Unit,
-    onCancelTrip: () -> Unit
+    onCancelTrip: () -> Unit,
+    onChat: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -591,6 +602,7 @@ private fun BottomSheetContent(
                     val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${d.phone}"))
                     context.startActivity(intent)
                 },
+                onChat = onChat,
                 isBottomSheet = true
             )
             return
@@ -634,7 +646,7 @@ private fun BottomSheetContent(
             color = MapText
         )
 
-        AnimatedVisibility(visible = focusedField != null) {
+        AnimatedVisibility(visible = focusedField != null && !hasRoute) {
             TextButton(
                 onClick = { 
                     focusedField?.let { onSelectOnMap(it) }
@@ -657,18 +669,21 @@ private fun BottomSheetContent(
                 onValueChange = onPickupQueryChange,
                 placeholder = "Punto de partida",
                 leadingDot = MapGreen,
-                modifier = Modifier.onFocusChanged { if (it.isFocused) focusedField = MapSelectionMode.ORIGIN },
+                enabled = !hasRoute,
+                modifier = Modifier.onFocusChanged { if (it.isFocused && !hasRoute) focusedField = MapSelectionMode.ORIGIN },
                 trailingContent = {
-                    IconButton(
-                        onClick = onUseMyLocation,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            Icons.Filled.MyLocation,
-                            contentDescription = "Mi ubicación",
-                            tint = MapBlue,
-                            modifier = Modifier.size(18.dp)
-                        )
+                    if (!hasRoute) {
+                        IconButton(
+                            onClick = onUseMyLocation,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.MyLocation,
+                                contentDescription = "Mi ubicación",
+                                tint = MapBlue,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             )
@@ -686,23 +701,7 @@ private fun BottomSheetContent(
             }
         }
 
-        // Línea conectora
-        Row(
-            modifier = Modifier.padding(start = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(0.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            repeat(5) {
-                Box(
-                    modifier = Modifier
-                        .width(2.dp)
-                        .height(5.dp)
-                        .clip(RoundedCornerShape(1.dp))
-                        .background(MapSubText.copy(alpha = 0.4f))
-                )
-                Spacer(Modifier.width(2.dp))
-            }
-        }
+    
 
         // ── Campo Destino ─────────────────────────────────────────────────────
         Column {
@@ -711,9 +710,10 @@ private fun BottomSheetContent(
                 onValueChange = onDestinationQueryChange,
                 placeholder = "¿A dónde vas?",
                 leadingDot = MapRed,
+                enabled = !hasRoute,
                 modifier = Modifier
                     .focusRequester(destFocusRequester)
-                    .onFocusChanged { if (it.isFocused) focusedField = MapSelectionMode.DESTINATION }
+                    .onFocusChanged { if (it.isFocused && !hasRoute) focusedField = MapSelectionMode.DESTINATION }
             )
             AnimatedVisibility(visible = uiState.destinationSearchQuery.isNotEmpty()) {
                 if (uiState.destinationPredictions.isNotEmpty()) {
@@ -883,12 +883,14 @@ private fun MapSearchField(
     onValueChange: (String) -> Unit,
     placeholder: String,
     leadingDot: Color,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier,
     trailingContent: (@Composable () -> Unit)? = null
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
+        enabled = enabled,
         placeholder = {
             Text(placeholder, color = MapSubText, fontSize = 14.sp)
         },
@@ -900,9 +902,28 @@ private fun MapSearchField(
                     .background(leadingDot)
             )
         },
-        trailingIcon = trailingContent,
+        trailingIcon = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (enabled && value.isNotEmpty()) {
+                    IconButton(
+                        onClick = { onValueChange("") },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = "Borrar",
+                            tint = MapSubText,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+                if (trailingContent != null) {
+                    trailingContent()
+                }
+            }
+        },
         singleLine = true,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().height(52.dp),
         shape = RoundedCornerShape(14.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = leadingDot.copy(alpha = 0.7f),

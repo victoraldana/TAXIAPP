@@ -100,3 +100,29 @@ data class TripHistoryItem(
     @SerializedName("vehicle_model") val vehicleModel: String?,
     @SerializedName("vehicle_plate") val vehiclePlate: String?
 )
+
+// ─── Chat de Viajes ───────────────────────────────────────────────────────────
+data class ChatMessageRequest(
+    @SerializedName("sender_id") val senderId: String,
+    val message: String
+)
+
+data class ChatMessageResponse(
+    val success: Boolean,
+    val data: ChatMessageItem? = null
+)
+
+data class ChatHistoryResponse(
+    val success: Boolean,
+    val data: List<ChatMessageItem> = emptyList()
+)
+
+data class ChatMessageItem(
+    val id: String,
+    @SerializedName("trip_id") val tripId: String,
+    @SerializedName("sender_id") val senderId: String,
+    val message: String,
+    @SerializedName("created_at") val createdAt: String,
+    @SerializedName("sender_name") val senderName: String?,
+    @SerializedName("sender_role") val senderRole: String?
+)

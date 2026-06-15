@@ -57,6 +57,7 @@ fun DriverAssignedScreen(
     destAddress: String,
     onCancel: () -> Unit,
     onContact: () -> Unit,
+    onChat: () -> Unit = {},
     isBottomSheet: Boolean = false
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
@@ -164,7 +165,7 @@ fun DriverAssignedScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(180.dp),
+                                .height(120.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             if (!driver.vehiclePhotoUrl.isNullOrEmpty()) {
@@ -174,7 +175,7 @@ fun DriverAssignedScreen(
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(180.dp)
+                                        .height(120.dp)
                                         .clip(RoundedCornerShape(16.dp))
                                 )
                             } else {
@@ -183,7 +184,7 @@ fun DriverAssignedScreen(
                                     color = driver.vehicleColor,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(180.dp)
+                                        .height(120.dp)
                                 )
                             }
                         }
@@ -288,16 +289,28 @@ fun DriverAssignedScreen(
                         Text(driver.phone, fontSize = 13.sp, color = AssignSub)
                     }
 
-                    // Botón llamar
-                    FloatingActionButton(
-                        onClick = onContact,
-                        modifier = Modifier.size(48.dp),
-                        containerColor = AssignGreen,
-                        contentColor = Color.White,
-                        shape = CircleShape,
-                        elevation = FloatingActionButtonDefaults.elevation(0.dp)
-                    ) {
-                        Icon(Icons.Filled.Phone, null, modifier = Modifier.size(20.dp))
+                    // Botones acción
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FloatingActionButton(
+                            onClick = onChat,
+                            modifier = Modifier.size(48.dp),
+                            containerColor = AssignCard,
+                            contentColor = AssignGreen,
+                            shape = CircleShape,
+                            elevation = FloatingActionButtonDefaults.elevation(0.dp)
+                        ) {
+                            Icon(Icons.Filled.Chat, null, modifier = Modifier.size(20.dp))
+                        }
+                        FloatingActionButton(
+                            onClick = onContact,
+                            modifier = Modifier.size(48.dp),
+                            containerColor = AssignGreen,
+                            contentColor = Color.White,
+                            shape = CircleShape,
+                            elevation = FloatingActionButtonDefaults.elevation(0.dp)
+                        ) {
+                            Icon(Icons.Filled.Phone, null, modifier = Modifier.size(20.dp))
+                        }
                     }
                 }
             }

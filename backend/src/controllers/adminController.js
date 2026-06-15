@@ -766,3 +766,44 @@ export const getDriverTrips = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CHAT DE VIAJES — obtener y enviar mensajes
+// ──────────────────────────────────────────────────────────────────────────────
+export const getTripMessages = async (req, res) => {
+  const { tripId } = req.params;
+  try {
+    const result = await query(`
+      SELECT m.id, m.trip_id, m.sender_id, m.message, m.created_at,
+             u.full_name AS sender_name, r.name AS sender_role
+      FROM trip_messages m
+      JOIN users u ON m.sender_id = u.id
+      JOIN roles r ON u.role_id = r.id
+      WHERE m.trip_id = $1
+      ORDER BY m.created_at ASC
+    `, [tripId]);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('getTripMessages:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const addTripMessage = async (req, res) => {
+  const { tripId } = req.params;
+  const { sender_id, message } = req.body;
+  if (!sender_id || !message) {
+    return res.status(400).json({ success: false, message: 'sender_id y message son requeridos' });
+  }
+  try {
+    const result = await query(`
+      INSERT INTO trip_messages (trip_id, sender_id, message)
+      VALUES ($1, $2, $3)
+      RETURNING id, trip_id, sender_id, message, created_at
+    `, [tripId, sender_id, message]);
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    console.error('addTripMessage:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};

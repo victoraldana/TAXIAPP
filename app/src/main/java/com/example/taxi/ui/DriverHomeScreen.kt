@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -36,6 +37,7 @@ import com.example.taxi.viewmodel.DriverViewModel
 import com.example.taxi.viewmodel.DriverTripState
 import android.media.RingtoneManager
 import android.net.Uri
+import kotlinx.coroutines.launch
 
 // ─── Paleta ──────────────────────────────────────────────────────────────────
 private val DrvDark    = Color(0xFF0A1628)
@@ -74,7 +76,10 @@ fun DriverHomeScreen(
     // Play sound when trip is assigned
     LaunchedEffect(tripState) {
         if (tripState is DriverTripState.TripAssigned) {
-            playDriverNotificationSound(context)
+            while (true) {
+                playDriverNotificationSound(context)
+                kotlinx.coroutines.delay(5000)
+            }
         }
     }
     val queuePos   by viewModel.queuePosition.collectAsState()
@@ -96,20 +101,51 @@ fun DriverHomeScreen(
         viewModel.init(driver.id)
     }
 
-    // Subir ubicación cada 5 segundos si está online
-    LaunchedEffect(isOnline, locationGranted) {
+    var isNavigating by remember { mutableStateOf(false) }
+    val cameraState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(LatLng(10.5, -66.9), 14f)
+    }
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(tripState) {
+        if (tripState is DriverTripState.Idle || tripState is DriverTripState.TripAssigned) {
+            isNavigating = false
+        }
+    }
+
+    // Subir ubicación cada 5 segundos si está online y manejar navegación
+    LaunchedEffect(isOnline, locationGranted, isNavigating) {
         if (isOnline && locationGranted) {
             while (true) {
                 fusedClient.lastLocation.addOnSuccessListener { loc ->
-                    loc?.let { viewModel.updateLocation(driver.id, it.latitude, it.longitude) }
+                    loc?.let { 
+                        viewModel.updateLocation(driver.id, it.latitude, it.longitude) 
+                        if (isNavigating) {
+                            val pos = CameraPosition.Builder()
+                                .target(LatLng(it.latitude, it.longitude))
+                                .zoom(19f)
+                                .tilt(60f)
+                                .also { b -> if (it.hasBearing()) b.bearing(it.bearing) }
+                                .build()
+                            coroutineScope.launch {
+                                cameraState.animate(CameraUpdateFactory.newCameraPosition(pos), 1000)
+                            }
+                        }
+                    }
                 }
-                kotlinx.coroutines.delay(5000)
+                kotlinx.coroutines.delay(if (isNavigating) 3000L else 5000L)
             }
         }
     }
 
-    val cameraState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(LatLng(10.5, -66.9), 14f)
+    var showChatDialog by remember { mutableStateOf(false) }
+    if (showChatDialog && tripState is DriverTripState.TripActive) {
+        val activeTrip = tripState as DriverTripState.TripActive
+        TripChatDialog(
+            tripId = activeTrip.tripId,
+            currentUserId = driver.id,
+            onDismiss = { showChatDialog = false }
+        )
     }
 
     // Centrar mapa en mi ubicación al inicio
@@ -151,7 +187,7 @@ fun DriverHomeScreen(
                 val activeRoute = if (driverToOriginRoute.isNotEmpty()) driverToOriginRoute
                                   else if (originToDestRoute.isNotEmpty()) originToDestRoute
                                   else return@LaunchedEffect
-                if (activeRoute.size >= 2) {
+                if (activeRoute.size >= 2 && !isNavigating) {
                     val bounds = com.google.android.gms.maps.model.LatLngBounds.builder()
                         .also { b -> activeRoute.forEach { b.include(it) } }
                         .build()
@@ -169,17 +205,33 @@ fun DriverHomeScreen(
             }
         }
 
-        TopBar(
-            driverName = driver.fullName ?: driver.phone ?: "Conductor",
-            isOnline = isOnline,
-            queuePos = queuePos,
-            onToggleOnline = { viewModel.toggleOnline(driver.id) },
-            onLogout = onLogout,
-            onShowHistory = { showHistory = true },
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .statusBarsPadding()
-        )
+        if (tripState !is DriverTripState.TripActive) {
+            TopBar(
+                driverName = driver.fullName ?: driver.phone ?: "Conductor",
+                isOnline = isOnline,
+                queuePos = queuePos,
+                onToggleOnline = { viewModel.toggleOnline(driver.id) },
+                onLogout = onLogout,
+                onShowHistory = { showHistory = true },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                val activeTrip = tripState as DriverTripState.TripActive
+                TripRouteCard(
+                    origin = activeTrip.originAddress,
+                    dest = activeTrip.destAddress,
+                    distance = activeTrip.distanceKm
+                )
+            }
+        }
 
         // ── PANEL INFERIOR ────────────────────────────────────────────────────
         AnimatedContent(
@@ -215,8 +267,11 @@ fun DriverHomeScreen(
                 )
                 is DriverTripState.TripActive -> TripActivePanel(
                     trip = state,
+                    isNavigating = isNavigating,
                     onNotifyArrival = { viewModel.notifyArrival(state.tripId) },
-                    onFinish = { viewModel.finishTrip(state.tripId, driver.id) }
+                    onFinish = { viewModel.finishTrip(state.tripId, driver.id) },
+                    onChat = { showChatDialog = true },
+                    onToggleNavigation = { isNavigating = !isNavigating }
                 )
             }
         }
@@ -547,96 +602,111 @@ private fun TripIncomingPanel(
 @Composable
 private fun TripActivePanel(
     trip: DriverTripState.TripActive,
+    isNavigating: Boolean,
     onNotifyArrival: () -> Unit,
-    onFinish: () -> Unit
+    onFinish: () -> Unit,
+    onChat: () -> Unit,
+    onToggleNavigation: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+            .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
             .background(DrvCard)
-            .border(1.dp, DrvGreen.copy(0.4f), RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+            .border(1.dp, DrvGreen.copy(0.4f), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
             .navigationBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(Modifier.width(40.dp).height(4.dp).clip(CircleShape).background(DrvBorder).align(Alignment.CenterHorizontally))
 
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(
-                Modifier.size(40.dp).clip(CircleShape).background(DrvGreen.copy(0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Filled.DirectionsCar, null, tint = DrvGreen, modifier = Modifier.size(22.dp))
-            }
-            Column {
-                Text("Viaje en curso", fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = DrvText)
-                Text("Cliente: ${trip.clientName}", fontSize = 13.sp, color = DrvSub)
-            }
-        }
-
-        TripRouteCard(origin = trip.originAddress, dest = trip.destAddress, distance = trip.distanceKm)
-
-        // Método de pago
         Row(
-            modifier = Modifier.fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(DrvCard.copy(alpha=0.5f))
-                .border(1.dp, DrvBorder, RoundedCornerShape(12.dp))
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Filled.Payments, null, tint = DrvYellow, modifier = Modifier.size(20.dp))
-                Text("Método de pago", color = DrvSub, fontSize = 13.sp)
-            }
-            Text(
-                trip.paymentMethod ?: "Efectivo Bs",
-                fontWeight = FontWeight.Bold, fontSize = 14.sp, color = DrvText
-            )
-        }
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            // Botón Avisar Llegada (si no ha llegado)
-            if (!trip.hasArrived) {
-                Button(
-                    onClick = onNotifyArrival,
-                    modifier = Modifier.weight(1f).height(54.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                    contentPadding = PaddingValues(0.dp)
+            // Client info with profile picture placeholder
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(
+                    modifier = Modifier.size(46.dp).clip(CircleShape).background(DrvBorder),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        Modifier.fillMaxSize()
-                            .background(Brush.horizontalGradient(listOf(DrvBlue, Color(0xFF29B6F6))), RoundedCornerShape(16.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.NotificationsActive, null, tint = DrvDark, modifier = Modifier.size(20.dp))
-                            Text("Llegué", fontWeight = FontWeight.ExtraBold, color = DrvDark, fontSize = 15.sp)
-                        }
-                    }
+                    Icon(Icons.Filled.Person, contentDescription = "Cliente", tint = DrvSub, modifier = Modifier.size(24.dp))
+                }
+                Column {
+                    Text(trip.clientName, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = DrvText, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 140.dp))
+                    Text("Viaje en curso", fontSize = 12.sp, color = DrvGreen, fontWeight = FontWeight.SemiBold)
                 }
             }
 
-            // Botón finalizar
+            // Método de pago
+            Column(horizontalAlignment = Alignment.End) {
+                Text("Pago", color = DrvSub, fontSize = 11.sp)
+                Text(
+                    trip.paymentMethod ?: "Efectivo Bs",
+                    fontWeight = FontWeight.Bold, fontSize = 14.sp, color = DrvYellow
+                )
+            }
+        }
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Botón Chat
             Button(
-                onClick = onFinish,
+                onClick = onChat,
+                modifier = Modifier.size(54.dp), // cuadrado
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = DrvCard.copy(alpha=0.5f)),
+                border = BorderStroke(1.dp, DrvBorder),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Icon(Icons.Filled.Chat, "Chat", tint = DrvYellow, modifier = Modifier.size(24.dp))
+            }
+
+            // Botón Navegar
+            Button(
+                onClick = onToggleNavigation,
                 modifier = Modifier.weight(1f).height(54.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = if (isNavigating) DrvDark else Color.Transparent),
+                border = if (isNavigating) BorderStroke(1.dp, DrvYellow) else null,
                 contentPadding = PaddingValues(0.dp)
             ) {
                 Box(
                     Modifier.fillMaxSize()
-                        .background(Brush.horizontalGradient(listOf(DrvGreen, Color(0xFF00E676))), RoundedCornerShape(16.dp)),
+                        .background(
+                            if (isNavigating) SolidColor(Color.Transparent) 
+                            else Brush.horizontalGradient(listOf(DrvYellow, DrvYellowD)), 
+                            RoundedCornerShape(14.dp)
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.CheckCircle, null, tint = Color(0xFF001A00), modifier = Modifier.size(20.dp))
-                        Text("Finalizar", fontWeight = FontWeight.ExtraBold, color = Color(0xFF001A00), fontSize = 15.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Navigation, null, tint = if (isNavigating) DrvYellow else DrvDark, modifier = Modifier.size(20.dp))
+                        Text(if (isNavigating) "Detener" else "Navegar", fontWeight = FontWeight.ExtraBold, color = if (isNavigating) DrvYellow else DrvDark, fontSize = 14.sp, maxLines = 1)
                     }
+                }
+            }
+
+            // Botón Acción
+            if (!trip.hasArrived) {
+                Button(
+                    onClick = onNotifyArrival,
+                    modifier = Modifier.weight(1f).height(54.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = DrvGreen),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text("Llegué", fontWeight = FontWeight.ExtraBold, color = Color.White, fontSize = 14.sp)
+                }
+            } else {
+                Button(
+                    onClick = onFinish,
+                    modifier = Modifier.weight(1f).height(54.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = DrvBlue),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text("Finalizar", fontWeight = FontWeight.ExtraBold, color = Color.White, fontSize = 14.sp)
                 }
             }
         }
