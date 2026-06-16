@@ -668,7 +668,7 @@ private fun TripActivePanel(
             Button(
                 onClick = {
                     val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
-                    scope.kotlinx.coroutines.launch {
+                    scope.launch {
                         val req = com.example.taxi.model.SupportMessageRequest(
                             message = "🚨 ALERTA SOS CONDUCTOR 🚨",
                             senderRole = "driver",

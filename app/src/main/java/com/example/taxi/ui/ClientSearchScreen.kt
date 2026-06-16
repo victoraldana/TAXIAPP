@@ -41,6 +41,11 @@ import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import com.example.taxi.model.LocationPoint
 import com.example.taxi.model.PlacePrediction
+import com.example.taxi.model.SupportMessageRequest
+import com.example.taxi.network.RetrofitClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import com.example.taxi.viewmodel.TaxiUiState
 import com.example.taxi.viewmodel.TaxiViewModel
 import com.google.android.gms.location.LocationServices
@@ -350,8 +355,8 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
                 locationGranted = locationGranted,
                 onPickupQueryChange = { viewModel.updatePickupQuery(it) },
                 onDestinationQueryChange = { viewModel.updateDestinationQuery(it) },
-                onPickupPredictionSelect = { viewModel.selectPickupPrediction(it, context) },
-                onDestinationPredictionSelect = { viewModel.selectDestinationPrediction(it, context) },
+                onPickupPredictionSelect = { viewModel.selectPrediction(it, context, isPickup = true) },
+                onDestinationPredictionSelect = { viewModel.selectPrediction(it, context, isPickup = false) },
                 onSelectOnMap = { mapSelectionMode = it },
                 onUseMyLocation = {
                     if (locationGranted) {
@@ -801,8 +806,8 @@ private fun BottomSheetContent(
                     Button(
                         onClick = {
                             // Acción SOS
-                            val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
-                            scope.kotlinx.coroutines.launch {
+                            val scope = CoroutineScope(Dispatchers.IO)
+                            scope.launch {
                                 val req = SupportMessageRequest(
                                     message = "🚨 ALERTA SOS 🚨 El cliente ha activado el botón de emergencia.",
                                     senderRole = "client",
