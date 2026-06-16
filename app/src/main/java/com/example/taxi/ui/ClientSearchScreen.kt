@@ -355,8 +355,8 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
                 locationGranted = locationGranted,
                 onPickupQueryChange = { viewModel.updatePickupQuery(it) },
                 onDestinationQueryChange = { viewModel.updateDestinationQuery(it) },
-                onPickupPredictionSelect = { viewModel.selectPrediction(it, context, isPickup = true) },
-                onDestinationPredictionSelect = { viewModel.selectPrediction(it, context, isPickup = false) },
+                onPickupPredictionSelect = { viewModel.selectPrediction(it, isPickup = true) },
+                onDestinationPredictionSelect = { viewModel.selectPrediction(it, isPickup = false) },
                 onSelectOnMap = { mapSelectionMode = it },
                 onUseMyLocation = {
                     if (locationGranted) {
