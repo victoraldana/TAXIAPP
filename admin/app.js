@@ -353,7 +353,61 @@ function vehicleEmoji(type) {
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
+// ─── Notificaciones de Soporte ──────────────────────────────────────────────────
+let lastNotifiedUnread = {}; // user_id -> unread_count
+
+async function checkSupportNotifications() {
+  if (Notification.permission !== "granted") return;
+  try {
+    const { data } = await api('/support/tickets');
+    if (!data) return;
+    
+    data.forEach(ticket => {
+      const { user_id, full_name, unread_count, type, last_message } = ticket;
+      const count = parseInt(unread_count) || 0;
+      
+      if (count > 0) {
+        const lastCount = lastNotifiedUnread[user_id] || 0;
+        if (count > lastCount) {
+          // Nueva notificación
+          const isSos = type === 'sos';
+          const title = isSos ? `🚨 ¡ALERTA SOS! - ${full_name}` : `Nuevo mensaje de soporte - ${full_name}`;
+          const options = {
+            body: last_message || "Tienes un nuevo mensaje.",
+            icon: isSos ? 'https://cdn-icons-png.flaticon.com/512/564/564619.png' : 'https://cdn-icons-png.flaticon.com/512/3249/3249935.png',
+            requireInteraction: isSos
+          };
+          
+          const notif = new Notification(title, options);
+          notif.onclick = () => {
+            window.focus();
+            notif.close();
+            // TODO: Navigate to support view if exists
+          };
+          
+          if (isSos) {
+            // Reproducir sonido para SOS si es posible
+            const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+            audio.play().catch(e => console.log('Audio autoplay blocked', e));
+          }
+        }
+        lastNotifiedUnread[user_id] = count;
+      } else {
+        lastNotifiedUnread[user_id] = 0;
+      }
+    });
+  } catch (e) {
+    console.error('Error checking support notifications:', e);
+  }
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
+if (Notification.permission === "default") {
+  Notification.requestPermission();
+}
+
 checkStatus();
 setInterval(checkStatus, 30000);
+checkSupportNotifications();
+setInterval(checkSupportNotifications, 5000); // Poll every 5s
 loadDashboard();

@@ -125,6 +125,7 @@ enum class MapSelectionMode { ORIGIN, DESTINATION }
 fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinished: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
     val tripState by viewModel.tripState.collectAsState()
+    val cancelRequestStatus by viewModel.cancelRequestStatus.collectAsState()
 
     val context = LocalContext.current
 
@@ -153,6 +154,49 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
     var hasAnnouncedAssigned by remember { mutableStateOf(false) }
     var showArrivalDialog by remember { mutableStateOf(false) }
     var showChatDialog by remember { mutableStateOf(false) }
+    var showCancelConfirmDialog by remember { mutableStateOf(false) }
+
+    if (cancelRequestStatus == "rejected") {
+        AlertDialog(
+            onDismissRequest = { viewModel.resetCancelRequestStatus() },
+            containerColor = MapCardLight,
+            title = { Text("Cancelación Rechazada", color = MapRed, fontWeight = FontWeight.Bold) },
+            text = { Text("El conductor ha rechazado tu solicitud de cancelación. Si necesitas ayuda urgente, por favor contacta a soporte presionando el botón SOS.", color = MapText) },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.resetCancelRequestStatus() },
+                    colors = ButtonDefaults.buttonColors(containerColor = MapYellow)
+                ) {
+                    Text("Entendido", color = MapDark)
+                }
+            }
+        )
+    }
+
+    if (showCancelConfirmDialog && tripState is TripState.Success) {
+        AlertDialog(
+            onDismissRequest = { showCancelConfirmDialog = false },
+            containerColor = MapCardLight,
+            title = { Text("Solicitar Cancelación", color = MapRed, fontWeight = FontWeight.Bold) },
+            text = { Text("¿Deseas solicitar al conductor la cancelación de este viaje?", color = MapText) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.requestCancelTrip((tripState as TripState.Success).tripId)
+                        showCancelConfirmDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MapRed)
+                ) {
+                    Text("Sí, solicitar", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelConfirmDialog = false }) {
+                    Text("Volver", color = MapSubText)
+                }
+            }
+        )
+    }
 
     LaunchedEffect(clientId) {
         viewModel.initClient(clientId)
@@ -794,14 +838,26 @@ private fun BottomSheetContent(
 
                 // Fila de botones secundarios: Cancelar y SOS
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(
-                        onClick = onSupportChat,
-                        modifier = Modifier.weight(1f).height(42.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, MapBorder),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MapSubText)
-                    ) {
-                        Text("Cancelar / Soporte", fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (cancelRequestStatus == "pending") {
+                        OutlinedButton(
+                            onClick = { },
+                            modifier = Modifier.weight(1f).height(42.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, MapYellow),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MapYellow)
+                        ) {
+                            Text("Cancelación enviada...", fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { showCancelConfirmDialog = true },
+                            modifier = Modifier.weight(1f).height(42.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, MapRed),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MapRed)
+                        ) {
+                            Text("Solicitar Cancelación", fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                     Button(
                         onClick = {

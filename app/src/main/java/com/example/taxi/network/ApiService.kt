@@ -125,6 +125,16 @@ interface ApiService {
         @Body request: com.example.taxi.model.CancelTripRequest
     ): Response<AuthModels.SimpleResponse>
 
+    @POST("api/admin/trips/{tripId}/cancel-request")
+    suspend fun requestCancelTrip(
+        @Path("tripId") tripId: String
+    ): Response<AuthModels.SimpleResponse>
+
+    @POST("api/admin/trips/{tripId}/reject-cancel")
+    suspend fun rejectCancelRequest(
+        @Path("tripId") tripId: String
+    ): Response<AuthModels.SimpleResponse>
+
     @PATCH("api/admin/trips/{tripId}/arrive")
     suspend fun notifyArrival(
         @Path("tripId") tripId: String

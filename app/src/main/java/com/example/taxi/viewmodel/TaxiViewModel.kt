@@ -60,7 +60,10 @@ class TaxiViewModel : ViewModel() {
     val uiState: StateFlow<TaxiUiState> = _uiState.asStateFlow()
 
     private val _tripState = MutableStateFlow<TripState>(TripState.Idle)
-    val tripState: StateFlow<TripState> = _tripState.asStateFlow()
+    val tripState: StateFlow<TripState> = _tripState
+
+    private val _cancelRequestStatus = MutableStateFlow<String?>(null)
+    val cancelRequestStatus: StateFlow<String?> = _cancelRequestStatus.asStateFlow()
 
     private val _driverLocation = MutableStateFlow<LatLng?>(null)
     val driverLocation: StateFlow<LatLng?> = _driverLocation.asStateFlow()
@@ -320,7 +323,9 @@ class TaxiViewModel : ViewModel() {
         val pickup = _uiState.value.pickupPoint ?: return
         val dest   = _uiState.value.destinationPoint ?: return
 
-        _tripState.value = TripState.Loading
+        _tripState.value = TripState.Idle
+        _cancelRequestStatus.value = null
+        locationPollingJob?.cancel()
 
         viewModelScope.launch {
             try {
@@ -434,12 +439,31 @@ class TaxiViewModel : ViewModel() {
                             tripStatusPollingJob?.cancel()
                             break
                         }
+                        
+                        if (data.cancelRequestStatus != _cancelRequestStatus.value) {
+                            _cancelRequestStatus.value = data.cancelRequestStatus
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e("TaxiViewModel", "Error polling trip status: ${e.message}")
                 }
             }
         }
+    }
+
+    fun requestCancelTrip(tripId: String) {
+        viewModelScope.launch {
+            try {
+                RetrofitClient.apiService.requestCancelTrip(tripId)
+                _cancelRequestStatus.value = "pending"
+            } catch (e: Exception) {
+                Log.e("TaxiViewModel", "Error requesting cancellation: ${e.message}")
+            }
+        }
+    }
+
+    fun resetCancelRequestStatus() {
+        _cancelRequestStatus.value = null
     }
 
     fun rateDriver(tripId: String, rating: Int, comment: String? = null, onDone: () -> Unit) {

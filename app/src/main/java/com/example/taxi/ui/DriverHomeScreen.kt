@@ -141,8 +141,6 @@ fun DriverHomeScreen(
     }
 
     var showChatDialog by remember { mutableStateOf(false) }
-    var showDriverCancelDialog by remember { mutableStateOf(false) }
-
     if (showChatDialog && tripState is DriverTripState.TripActive) {
         val activeTrip = tripState as DriverTripState.TripActive
         TripChatDialog(
@@ -287,7 +285,6 @@ fun DriverHomeScreen(
                     onChat = { showChatDialog = true },
                     onToggleNavigation = { isNavigating = !isNavigating },
                     onSupportChat = { showSupportChat = true },
-                    onCancelTrip = { showDriverCancelDialog = true },
                     driverId = driver.id
                 )
                 is DriverTripState.CancelledByAdmin -> {
@@ -339,51 +336,6 @@ fun DriverHomeScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = DrvYellow)
                     ) {
                         Text("Entendido", color = Color.Black, fontWeight = FontWeight.Bold)
-                    }
-                }
-            )
-        }
-
-        // ── Diálogo de cancelación por el conductor ──────────────────────────────────────────────────────────────────
-        if (showDriverCancelDialog && tripState is DriverTripState.TripActive) {
-            val activeTrip = tripState as DriverTripState.TripActive
-            var cancelReason by remember { mutableStateOf("") }
-            AlertDialog(
-                onDismissRequest = { showDriverCancelDialog = false },
-                containerColor = DrvCard,
-                title = { Text("Cancelar Viaje", color = DrvRed, fontWeight = FontWeight.Bold) },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("¿Estás seguro de que deseas cancelar este viaje?", color = DrvText, fontSize = 14.sp)
-                        OutlinedTextField(
-                            value = cancelReason,
-                            onValueChange = { cancelReason = it },
-                            label = { Text("Motivo (opcional)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = DrvText,
-                                unfocusedTextColor = DrvText,
-                                focusedBorderColor = DrvRed,
-                                unfocusedBorderColor = DrvBorder
-                            ),
-                            maxLines = 3
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            viewModel.cancelTrip(activeTrip.tripId, driver.id, cancelReason)
-                            showDriverCancelDialog = false
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = DrvRed)
-                    ) {
-                        Text("Confirmar", color = Color.White)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showDriverCancelDialog = false }) {
-                        Text("Volver", color = DrvSub)
                     }
                 }
             )
@@ -721,7 +673,6 @@ private fun TripActivePanel(
     onChat: () -> Unit,
     onToggleNavigation: () -> Unit,
     onSupportChat: () -> Unit,
-    onCancelTrip: () -> Unit,
     driverId: String
 ) {
     Column(
@@ -849,19 +800,6 @@ private fun TripActivePanel(
                 ) {
                     Text("Finalizar", fontWeight = FontWeight.ExtraBold, color = Color.White, fontSize = 14.sp)
                 }
-            }
-        }
-        
-        // Botón Cancelar Viaje
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            TextButton(
-                onClick = onCancelTrip,
-                colors = ButtonDefaults.textButtonColors(contentColor = DrvRed)
-            ) {
-                Text("Cancelar Viaje", fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
         }
     }

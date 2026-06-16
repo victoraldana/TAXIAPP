@@ -4,6 +4,7 @@ import {
   getDriverQueueStatus, updateDriverLocation, getPendingTrip, getActiveTripForClient,
   getQueue, addToQueue, removeFromQueue, moveInQueue,
   listTrips, assignNextDriver, createTrip, rejectTrip, finishTrip, cancelTrip,
+  requestCancelTrip, rejectCancelRequest,
   getTripStatus, rateDriver, notifyArrival, acceptTrip,
   getClientTrips, getDriverTrips, getTripMessages, addTripMessage,
   getSupportMessages, sendSupportMessage, getSupportTickets
@@ -44,6 +45,8 @@ router.patch('/trips/:tripId/reject',         rejectTrip);             // conduc
 router.patch('/trips/:tripId/finish',         finishTrip);             // conductor finaliza
 router.patch('/trips/:tripId/arrive',         notifyArrival);          // conductor avisa que llegó
 router.patch('/trips/:tripId/cancel',         cancelTrip);             // admin cancela
+router.post('/trips/:tripId/cancel-request',  requestCancelTrip);
+router.post('/trips/:tripId/reject-cancel',   rejectCancelRequest);
 router.get('/trips/:tripId/status',           getTripStatus);          // cliente polling
 router.post('/trips/:tripId/rate',            rateDriver);             // cliente califica
 router.patch('/trips/:tripId/accept',         acceptTrip);             // conductor acepta

@@ -673,13 +673,53 @@ export const cancelTrip = async (req, res) => {
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
+// VIAJES — solicitar cancelación (cliente)
+// ──────────────────────────────────────────────────────────────────────────────
+export const requestCancelTrip = async (req, res) => {
+  const { tripId } = req.params;
+  try {
+    const result = await query(
+      `UPDATE trips SET cancel_request_status='pending' WHERE id=$1 AND status IN ('pending', 'accepted', 'arrived', 'on_route', 'in_progress') RETURNING id`,
+      [tripId]
+    );
+    if (result.rows.length === 0)
+      return res.status(404).json({ success: false, message: 'Viaje no encontrado o ya finalizado.' });
+    
+    res.json({ success: true, message: 'Solicitud de cancelación enviada al conductor.' });
+  } catch (err) {
+    console.error('requestCancelTrip:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// VIAJES — rechazar solicitud de cancelación (conductor)
+// ──────────────────────────────────────────────────────────────────────────────
+export const rejectCancelRequest = async (req, res) => {
+  const { tripId } = req.params;
+  try {
+    const result = await query(
+      `UPDATE trips SET cancel_request_status='rejected' WHERE id=$1 AND cancel_request_status='pending' RETURNING id`,
+      [tripId]
+    );
+    if (result.rows.length === 0)
+      return res.status(404).json({ success: false, message: 'No hay solicitud pendiente.' });
+
+    res.json({ success: true, message: 'Solicitud rechazada.' });
+  } catch (err) {
+    console.error('rejectCancelRequest:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
 // VIAJES — obtener estado (cliente hace polling para detectar finalización)
 // ──────────────────────────────────────────────────────────────────────────────
 export const getTripStatus = async (req, res) => {
   const { tripId } = req.params;
   try {
     const result = await query(
-      `SELECT t.id, t.status, t.driver_id, t.cancel_reason
+      `SELECT t.id, t.status, t.driver_id, t.cancel_reason, t.cancel_request_status
        FROM trips t
        WHERE t.id = $1`,
       [tripId]

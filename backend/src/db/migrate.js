@@ -204,6 +204,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_driver_unit ON driver_profiles(unit_number
 -- Calificación del cliente hacia el conductor
 ALTER TABLE trips ADD COLUMN IF NOT EXISTS client_rating  SMALLINT;
 ALTER TABLE trips ADD COLUMN IF NOT EXISTS client_comment TEXT;
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS cancel_request_status VARCHAR(20) DEFAULT NULL;
 
 CREATE TABLE IF NOT EXISTS driver_queue (
     id             UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),

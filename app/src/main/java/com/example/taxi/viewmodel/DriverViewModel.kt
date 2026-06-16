@@ -60,6 +60,9 @@ class DriverViewModel : ViewModel() {
     private val _tripState    = MutableStateFlow<DriverTripState>(DriverTripState.Idle)
     val tripState: StateFlow<DriverTripState> = _tripState.asStateFlow()
 
+    private val _cancelRequestStatus = MutableStateFlow<String?>(null)
+    val cancelRequestStatus: StateFlow<String?> = _cancelRequestStatus.asStateFlow()
+
     private val _isOnline     = MutableStateFlow(false)
     val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()
 
@@ -421,6 +424,21 @@ class DriverViewModel : ViewModel() {
                 }
             }
         }
+    }
+
+    fun rejectCancelRequest(tripId: String) {
+        viewModelScope.launch {
+            try {
+                RetrofitClient.apiService.rejectCancelRequest(tripId)
+                _cancelRequestStatus.value = "rejected"
+            } catch (e: Exception) {
+                Log.e("DriverViewModel", "rejectCancelRequest error: ${e.message}")
+            }
+        }
+    }
+
+    fun resetCancelRequestStatus() {
+        _cancelRequestStatus.value = null
     }
 
     // ── Restablecer a Idle (después de cancelación por admin) ─────────────────
