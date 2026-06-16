@@ -19,6 +19,10 @@
     <a href="#" class="nav-item" data-view="drivers"><span>👤</span> Conductores</a>
     <a href="#" class="nav-item" data-view="queue"><span>🔄</span> Cola de Turnos</a>
     <a href="#" class="nav-item" data-view="trips"><span>🗺️</span> Viajes</a>
+    <a href="#" class="nav-item" data-view="support" id="nav-support">
+      <span>🆘</span> Soporte
+      <span class="unread-badge" id="supportUnreadBadge" style="display:none;background:#ef4444;color:white;border-radius:9999px;font-size:11px;font-weight:700;padding:2px 7px;margin-left:auto;">0</span>
+    </a>
   </nav>
   <div class="sidebar-footer">
     <div class="api-status" id="apiStatus">
@@ -123,6 +127,31 @@
         <thead><tr><th>ID</th><th>Cliente</th><th>Conductor</th><th>Unidad</th><th>Origen</th><th>Destino</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
         <tbody id="tripsBodyCompleted"></tbody>
       </table>
+    </div>
+  </section>
+  <!-- SOPORTE -->
+  <section class="view" id="view-support">
+    <div class="view-header">
+      <h2>🆘 Chat de Soporte</h2>
+      <button class="btn-secondary" onclick="loadSupportTickets()">↻ Actualizar</button>
+    </div>
+    <div class="support-layout">
+      <!-- Lista de tickets -->
+      <div class="support-tickets" id="supportTicketList">
+        <p class="hint" style="padding:16px;">Cargando conversaciones...</p>
+      </div>
+      <!-- Panel de chat -->
+      <div class="support-chat-panel" id="supportChatPanel" style="display:none;">
+        <div class="support-chat-header" id="supportChatHeader">
+          <strong id="supportChatUserName">—</strong>
+          <span id="supportChatUserPhone" style="font-size:12px;color:#94a3b8;"></span>
+        </div>
+        <div class="support-chat-messages" id="supportChatMessages"></div>
+        <div class="support-chat-input">
+          <input type="text" id="supportAdminInput" placeholder="Escribe una respuesta como admin..." class="input-field" style="flex:1;" onkeydown="if(event.key==='Enter') sendAdminSupportMessage()">
+          <button class="btn-primary" onclick="sendAdminSupportMessage()">Enviar</button>
+        </div>
+      </div>
     </div>
   </section>
 </main>

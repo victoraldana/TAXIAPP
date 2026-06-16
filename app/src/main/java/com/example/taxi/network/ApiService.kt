@@ -163,5 +163,17 @@ interface ApiService {
     suspend fun getDriverTrips(
         @Path("driverId") driverId: String
     ): Response<com.example.taxi.model.TripHistoryResponse>
+
+    // ── Chat de Soporte ───────────────────────────────────────────────────────
+    @GET("api/admin/support/{userId}/messages")
+    suspend fun getSupportMessages(
+        @Path("userId") userId: String
+    ): Response<com.example.taxi.model.SupportHistoryResponse>
+
+    @POST("api/admin/support/{userId}/messages")
+    suspend fun sendSupportMessage(
+        @Path("userId") userId: String,
+        @Body request: com.example.taxi.model.SupportMessageRequest
+    ): Response<com.example.taxi.model.ChatMessageResponse>
 }
 

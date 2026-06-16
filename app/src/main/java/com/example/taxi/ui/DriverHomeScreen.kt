@@ -198,11 +198,21 @@ fun DriverHomeScreen(
 
         // ── BARRA SUPERIOR ────────────────────────────────────────────────────
         var showHistory by remember { mutableStateOf(false) }
+        var showSupportChat by remember { mutableStateOf(false) }
 
         if (showHistory) {
             TripHistoryDialog(userId = driver.id, isDriver = true) {
                 showHistory = false
             }
+        }
+
+        if (showSupportChat && tripState is DriverTripState.TripActive) {
+            val activeTrip = tripState as DriverTripState.TripActive
+            SupportChatDialog(
+                userId = driver.id,
+                tripId = activeTrip.tripId,
+                onDismiss = { showSupportChat = false }
+            )
         }
 
         if (tripState !is DriverTripState.TripActive) {
@@ -271,7 +281,9 @@ fun DriverHomeScreen(
                     onNotifyArrival = { viewModel.notifyArrival(state.tripId) },
                     onFinish = { viewModel.finishTrip(state.tripId, driver.id) },
                     onChat = { showChatDialog = true },
-                    onToggleNavigation = { isNavigating = !isNavigating }
+                    onToggleNavigation = { isNavigating = !isNavigating },
+                    onSupportChat = { showSupportChat = true },
+                    driverId = driver.id
                 )
             }
         }
@@ -606,7 +618,9 @@ private fun TripActivePanel(
     onNotifyArrival: () -> Unit,
     onFinish: () -> Unit,
     onChat: () -> Unit,
-    onToggleNavigation: () -> Unit
+    onToggleNavigation: () -> Unit,
+    onSupportChat: () -> Unit,
+    driverId: String
 ) {
     Column(
         modifier = Modifier
@@ -650,6 +664,31 @@ private fun TripActivePanel(
         }
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Botón SOS / Soporte
+            Button(
+                onClick = {
+                    val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
+                    scope.kotlinx.coroutines.launch {
+                        val req = com.example.taxi.model.SupportMessageRequest(
+                            message = "🚨 ALERTA SOS CONDUCTOR 🚨",
+                            senderRole = "driver",
+                            tripId = trip.tripId,
+                            type = "sos"
+                        )
+                        try {
+                            com.example.taxi.network.RetrofitClient.apiService.sendSupportMessage(driverId, req)
+                        } catch (e: Exception) { e.printStackTrace() }
+                    }
+                    onSupportChat()
+                },
+                modifier = Modifier.size(54.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = DrvRed.copy(alpha=0.2f)),
+                border = BorderStroke(1.dp, DrvRed),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Text("SOS", color = DrvRed, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            }
             // Botón Chat
             Button(
                 onClick = onChat,

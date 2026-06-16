@@ -222,6 +222,19 @@ CREATE TABLE IF NOT EXISTS trip_messages (
     created_at     TIMESTAMPTZ  DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_trip_msgs ON trip_messages(trip_id, created_at);
+
+CREATE TABLE IF NOT EXISTS support_messages (
+    id          UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id     UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sender_role VARCHAR(20)  NOT NULL,           -- 'client' | 'driver' | 'admin'
+    trip_id     UUID         REFERENCES trips(id) ON DELETE SET NULL,
+    message     TEXT         NOT NULL,
+    type        VARCHAR(20)  DEFAULT 'support',  -- 'support' | 'sos' | 'cancel'
+    is_read     BOOLEAN      DEFAULT FALSE,
+    created_at  TIMESTAMPTZ  DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_support_msgs_user ON support_messages(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_support_unread    ON support_messages(is_read) WHERE is_read = FALSE;
 `;
 
 // ============================================================

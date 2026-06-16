@@ -119,10 +119,35 @@ data class ChatHistoryResponse(
 
 data class ChatMessageItem(
     val id: String,
-    @SerializedName("trip_id") val tripId: String,
+    @SerializedName("trip_id") val tripId: String? = null,
     @SerializedName("sender_id") val senderId: String,
     val message: String,
     @SerializedName("created_at") val createdAt: String,
     @SerializedName("sender_name") val senderName: String?,
     @SerializedName("sender_role") val senderRole: String?
+)
+
+// ─── Chat de Soporte ──────────────────────────────────────────────────────────
+data class SupportMessageRequest(
+    val message: String,
+    @SerializedName("sender_role") val senderRole: String = "client",
+    @SerializedName("trip_id")     val tripId: String? = null,
+    val type: String = "support"             // "support" | "sos" | "cancel"
+)
+
+data class SupportHistoryResponse(
+    val success: Boolean,
+    val data: List<SupportMessageItem> = emptyList()
+)
+
+data class SupportMessageItem(
+    val id: String,
+    @SerializedName("user_id")     val userId: String,
+    @SerializedName("sender_role") val senderRole: String,
+    @SerializedName("trip_id")     val tripId: String?,
+    val message: String,
+    val type: String,
+    @SerializedName("is_read")     val isRead: Boolean,
+    @SerializedName("created_at")  val createdAt: String,
+    @SerializedName("user_name")   val userName: String?
 )

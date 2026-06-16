@@ -20,8 +20,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.example.taxi.model.ChatMessageItem
-import com.example.taxi.model.ChatMessageRequest
+import com.example.taxi.model.SupportMessageItem
+import com.example.taxi.model.SupportMessageRequest
 import com.example.taxi.network.RetrofitClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -34,29 +34,30 @@ private val ChatTextOther = Color(0xFFF0F6FF)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TripChatDialog(
-    tripId: String,
-    currentUserId: String,
+fun SupportChatDialog(
+    userId: String,
+    tripId: String? = null,
     onDismiss: () -> Unit
 ) {
-    var messages by remember { mutableStateOf<List<ChatMessageItem>>(emptyList()) }
+    var messages by remember { mutableStateOf<List<SupportMessageItem>>(emptyList()) }
     var inputText by remember { mutableStateOf("") }
+
     val scope = rememberCoroutineScope()
 
     val context = androidx.compose.ui.platform.LocalContext.current
 
     // Polling messages
-    LaunchedEffect(tripId) {
+    LaunchedEffect(userId) {
         var lastCount = 0
         while (true) {
             try {
-                val response = RetrofitClient.apiService.getTripMessages(tripId)
+                val response = RetrofitClient.apiService.getSupportMessages(userId)
                 if (response.isSuccessful) {
                     val newMessages = response.body()?.data ?: emptyList()
                     if (newMessages.size > lastCount && lastCount > 0) {
                         // Reproducir sonido si hay mensajes nuevos y no es la primera carga
                         val lastMsg = newMessages.last()
-                        if (lastMsg.senderId != currentUserId) {
+                        if (lastMsg.senderRole == "admin") {
                             com.example.taxi.utils.SoundUtils.playNotificationSound(context)
                         }
                     }
@@ -94,7 +95,7 @@ fun TripChatDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Chat del Viaje", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("Chat de Soporte", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Filled.Close, contentDescription = "Cerrar", tint = Color.White)
                     }
@@ -116,41 +117,37 @@ fun TripChatDialog(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(messages) { msg ->
-                        val isMe = msg.senderId == currentUserId
+                        val isMe = msg.senderRole != "admin"
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(0.8f)
-                                    .wrapContentWidth(if (isMe) Alignment.End else Alignment.Start)
-                                    .clip(
-                                        RoundedCornerShape(
-                                            topStart = 16.dp,
-                                            topEnd = 16.dp,
-                                            bottomStart = if (isMe) 16.dp else 0.dp,
-                                            bottomEnd = if (isMe) 0.dp else 16.dp
+                            Column(horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(
+                                            RoundedCornerShape(
+                                                topStart = 16.dp,
+                                                topEnd = 16.dp,
+                                                bottomStart = if (isMe) 16.dp else 0.dp,
+                                                bottomEnd = if (isMe) 0.dp else 16.dp
+                                            )
                                         )
-                                    )
-                                    .background(if (isMe) ChatBubbleMe else ChatBubbleOther)
-                                    .padding(12.dp)
-                            ) {
-                                Column {
-                                    if (!isMe && msg.senderName != null) {
-                                        Text(
-                                            text = msg.senderName,
-                                            color = ChatBubbleMe,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
+                                        .background(if (isMe) ChatBubbleMe else ChatBubbleOther)
+                                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                                ) {
                                     Text(
                                         text = msg.message,
                                         color = if (isMe) ChatTextMe else ChatTextOther,
                                         fontSize = 15.sp
                                     )
                                 }
+                                Text(
+                                    text = if (isMe) "Yo" else "Soporte (Admin)",
+                                    color = Color.Gray,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp)
+                                )
                             }
                         }
                     }
@@ -184,21 +181,19 @@ fun TripChatDialog(
                     IconButton(
                         onClick = {
                             if (inputText.isNotBlank()) {
-                                val textToSend = inputText
+                                val txt = inputText
                                 inputText = ""
                                 scope.launch {
                                     try {
-                                        RetrofitClient.apiService.sendTripMessage(
-                                            tripId,
-                                            ChatMessageRequest(currentUserId, textToSend)
+                                        val req = SupportMessageRequest(
+                                            message = txt,
+                                            senderRole = "client",
+                                            tripId = tripId,
+                                            type = "support"
                                         )
-                                        // Fetch immediately after send
-                                        val response = RetrofitClient.apiService.getTripMessages(tripId)
-                                        if (response.isSuccessful) {
-                                            messages = response.body()?.data ?: emptyList()
-                                        }
+                                        RetrofitClient.apiService.sendSupportMessage(userId, req)
                                     } catch (e: Exception) {
-                                        // Ignore
+                                        e.printStackTrace()
                                     }
                                 }
                             }

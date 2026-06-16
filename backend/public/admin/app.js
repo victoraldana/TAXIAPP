@@ -7,11 +7,12 @@ function navigate(view) {
   document.getElementById('view-' + view).classList.add('active');
   document.querySelector(`[data-view="${view}"]`).classList.add('active');
   document.getElementById('pageTitle').textContent =
-    { dashboard: 'Dashboard', drivers: 'Conductores', queue: 'Cola de Turnos', trips: 'Viajes' }[view];
+    { dashboard: 'Dashboard', drivers: 'Conductores', queue: 'Cola de Turnos', trips: 'Viajes', support: '🆘 Soporte' }[view];
   if (view === 'dashboard') loadDashboard();
   if (view === 'drivers')   loadDrivers();
   if (view === 'queue')     { loadQueue(); loadDriversForQueue(); }
   if (view === 'trips')     loadTrips();
+  if (view === 'support')   loadSupportTickets();
 }
 document.querySelectorAll('.nav-item').forEach(item => {
   item.addEventListener('click', (e) => { e.preventDefault(); navigate(item.dataset.view); });
@@ -399,7 +400,101 @@ function vehicleEmoji(type) {
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
+// ─── SOPORTE ──────────────────────────────────────────────────────────────────
+let currentSupportUserId = null;
+let currentSupportUser   = null;
+let supportPollInterval  = null;
+
+async function loadSupportTickets() {
+  try {
+    const { data } = await api('/support/tickets');
+    const el = document.getElementById('supportTicketList');
+
+    // Actualizar badge global de no leídos
+    const totalUnread = data.reduce((s, t) => s + parseInt(t.unread_count || 0), 0);
+    const badge = document.getElementById('supportUnreadBadge');
+    if (totalUnread > 0) { badge.style.display = 'inline'; badge.textContent = totalUnread; }
+    else badge.style.display = 'none';
+
+    if (!data.length) {
+      el.innerHTML = '<div class="empty-state">💬 No hay conversaciones de soporte aún</div>';
+      return;
+    }
+
+    el.innerHTML = data.map(t => {
+      const typeLabel = { sos: '🆘 SOS', cancel: '❌ Cancelación', support: '💬 Soporte' }[t.type] || '💬 Soporte';
+      const unread = parseInt(t.unread_count || 0);
+      return `
+        <div class="support-ticket-item ${currentSupportUserId === t.user_id ? 'active' : ''}"
+             onclick="openSupportChat('${t.user_id}','${t.full_name || ''}','${t.phone || ''}')">
+          <div class="support-ticket-name">
+            ${t.full_name || 'Usuario'}
+            ${unread > 0 ? `<span class="support-unread">${unread}</span>` : ''}
+          </div>
+          <div class="support-ticket-preview">${t.last_message || '—'}</div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px">
+            <span class="support-ticket-type ${t.type}">${typeLabel}</span>
+            <span style="font-size:10px;color:var(--sub)">${new Date(t.created_at).toLocaleString('es')}</span>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (e) { console.error('loadSupportTickets:', e); }
+}
+
+async function openSupportChat(userId, userName, userPhone) {
+  currentSupportUserId = userId;
+  currentSupportUser   = { name: userName, phone: userPhone };
+
+  document.getElementById('supportChatPanel').style.display = 'flex';
+  document.getElementById('supportChatUserName').textContent = userName || userId;
+  document.getElementById('supportChatUserPhone').textContent = userPhone ? `📞 ${userPhone}` : '';
+
+  await loadSupportChatMessages();
+
+  // Polling automático cada 4s
+  clearInterval(supportPollInterval);
+  supportPollInterval = setInterval(loadSupportChatMessages, 4000);
+  loadSupportTickets(); // Actualizar badges
+}
+
+async function loadSupportChatMessages() {
+  if (!currentSupportUserId) return;
+  try {
+    const { data } = await api(`/support/${currentSupportUserId}/messages`);
+    const el = document.getElementById('supportChatMessages');
+    el.innerHTML = data.map(m => {
+      const isAdmin = m.sender_role === 'admin';
+      const typeChip = m.type !== 'support'
+        ? `<span class="${m.type === 'sos' ? 'sos-badge' : ''}" style="font-size:10px;margin-right:6px">${m.type === 'sos' ? '🆘 SOS' : '❌ Cancelación'}</span>`
+        : '';
+      return `
+        <div class="support-msg ${isAdmin ? 'from-admin' : 'from-user'}">
+          ${!isAdmin ? typeChip : ''}
+          ${m.message}
+          <div class="support-msg-meta">${isAdmin ? '👨‍💼 Admin' : m.user_name || 'Usuario'} · ${new Date(m.created_at).toLocaleTimeString('es')}</div>
+        </div>`;
+    }).join('');
+    el.scrollTop = el.scrollHeight;
+  } catch (e) { console.error('loadSupportChatMessages:', e); }
+}
+
+async function sendAdminSupportMessage() {
+  const input = document.getElementById('supportAdminInput');
+  const msg = input.value.trim();
+  if (!msg || !currentSupportUserId) return;
+  input.value = '';
+  try {
+    await api(`/support/${currentSupportUserId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ message: msg, sender_role: 'admin' })
+    });
+    await loadSupportChatMessages();
+    loadSupportTickets();
+  } catch (e) { toast('Error enviando mensaje', 'error'); }
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 checkStatus();
 setInterval(checkStatus, 30000);
+setInterval(loadSupportTickets, 15000); // Polling de tickets nuevos
 loadDashboard();

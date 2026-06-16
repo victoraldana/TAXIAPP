@@ -149,4 +149,28 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--tex
   .queue-container { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: 1fr 1fr; }
+  .support-layout { grid-template-columns: 1fr; }
 }
+
+/* ── SUPPORT CHAT ── */
+.support-layout { display: grid; grid-template-columns: 300px 1fr; gap: 16px; height: calc(100vh - 160px); }
+.support-tickets { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow-y: auto; }
+.support-ticket-item { padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .2s; }
+.support-ticket-item:hover, .support-ticket-item.active { background: var(--card2); }
+.support-ticket-name { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.support-ticket-preview { font-size: 12px; color: var(--sub); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.support-ticket-type { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
+.support-ticket-type.sos { background: rgba(239,83,80,.2); color: var(--red); }
+.support-ticket-type.cancel { background: rgba(255,193,7,.2); color: var(--yellow); }
+.support-ticket-type.support { background: rgba(79,195,247,.2); color: var(--blue); }
+.support-unread { background: var(--red); color: white; border-radius: 999px; font-size: 10px; font-weight: 700; padding: 1px 6px; }
+.support-chat-panel { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.support-chat-header { padding: 14px 18px; border-bottom: 1px solid var(--border); background: var(--card2); display: flex; align-items: center; gap: 10px; }
+.support-chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.support-msg { max-width: 70%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.5; }
+.support-msg.from-user { background: var(--card2); color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px; }
+.support-msg.from-admin { background: linear-gradient(135deg,var(--yellow),var(--yellow-dk)); color: #0d0d0d; align-self: flex-end; border-bottom-right-radius: 4px; font-weight: 500; }
+.support-msg-meta { font-size: 10px; color: var(--sub); margin-top: 3px; }
+.support-msg.from-admin .support-msg-meta { color: rgba(0,0,0,.5); }
+.support-chat-input { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 10px; background: var(--card2); }
+.sos-badge { background: rgba(239,83,80,.15); border: 1px solid var(--red); color: var(--red); padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }

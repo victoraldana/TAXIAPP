@@ -50,7 +50,7 @@ data class TaxiUiState(
 sealed class TripState {
     object Idle    : TripState()
     object Loading : TripState()
-    data class Success(val driver: DriverData?, val tripId: String, val hasArrived: Boolean = false) : TripState()
+    data class Success(val driver: DriverData?, val tripId: String, val hasArrived: Boolean = false, val status: String = "accepted") : TripState()
     data class Completed(val tripId: String, val driverName: String?) : TripState()
     data class Error(val message: String) : TripState()
 }
@@ -93,18 +93,42 @@ class TaxiViewModel : ViewModel() {
     fun initClient(clientId: String) {
         viewModelScope.launch {
             try {
+                // 1. Buscar si hay un viaje activo
                 val res = RetrofitClient.apiService.getActiveTripForClient(clientId)
-                if (res.isSuccessful) {
-                    val trip = res.body()?.data
-                    if (trip != null) {
-                        _tripState.value = TripState.Success(
-                            driver = null, // Se cargará con polling
-                            tripId = trip.tripId,
-                            hasArrived = trip.status == "arrived"
-                        )
-                        startPollingTripStatus(trip.tripId, null)
-                    }
-                }
+                if (!res.isSuccessful) return@launch
+                val trip = res.body()?.data ?: return@launch
+
+                // 2. Obtener el estado completo del viaje (con info del conductor)
+                val statusRes = RetrofitClient.apiService.getTripStatus(trip.tripId)
+                val tripData = if (statusRes.isSuccessful) statusRes.body()?.data else null
+
+                val driver = tripData?.driver
+                val status = tripData?.status ?: trip.status
+
+                // 3. Restaurar addresses en el uiState si vienen del trip
+                _uiState.value = _uiState.value.copy(
+                    pickupPoint = if (!trip.originAddress.isNullOrEmpty())
+                        LocationPoint(trip.originLat ?: 0.0, trip.originLng ?: 0.0, trip.originAddress)
+                    else null,
+                    destinationPoint = if (!trip.destAddress.isNullOrEmpty())
+                        LocationPoint(trip.destLat ?: 0.0, trip.destLng ?: 0.0, trip.destAddress)
+                    else null
+                )
+
+                // 4. Emitir el estado correcto inmediatamente
+                _tripState.value = TripState.Success(
+                    driver   = driver,
+                    tripId   = trip.tripId,
+                    hasArrived = status == "arrived",
+                    status = status ?: "accepted"
+                )
+
+                // 5. Iniciar polling para seguir escuchando cambios
+                startPollingTripStatus(trip.tripId, driver?.fullName)
+
+                // 6. Si hay driver, iniciar polling de ubicación
+                driver?.id?.let { startPollingLocation(it) }
+
             } catch (e: Exception) {
                 Log.e("TaxiViewModel", "initClient error: ${e.message}")
             }
@@ -381,16 +405,19 @@ class TaxiViewModel : ViewModel() {
                             break
                         } else if (status == "arrived") {
                             val currentState = _tripState.value
-                            if (currentState is TripState.Success && !currentState.hasArrived) {
-                                _tripState.value = currentState.copy(hasArrived = true)
+                            if (currentState is TripState.Success) {
+                                _tripState.value = currentState.copy(hasArrived = true, status = status)
                             }
-                        } else if (status == "accepted") {
+                        } else if (status == "accepted" || status == "in_progress") {
                             val currentState = _tripState.value
-                            if (currentState is TripState.Success && currentState.driver == null) {
-                                _tripState.value = currentState.copy(driver = data.driver)
-                                // Iniciar polling de ubicación del conductor
-                                data.driver?.id?.let { dId ->
-                                    startPollingLocation(dId)
+                            if (currentState is TripState.Success) {
+                                _tripState.value = currentState.copy(
+                                    driver = currentState.driver ?: data.driver,
+                                    status = status
+                                )
+                                // Iniciar polling de ubicación del conductor si no lo teníamos
+                                if (currentState.driver == null) {
+                                    data.driver?.id?.let { dId -> startPollingLocation(dId) }
                                 }
                             }
                         } else if (status == "cancelled_no_drivers") {

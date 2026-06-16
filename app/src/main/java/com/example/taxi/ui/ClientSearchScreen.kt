@@ -197,6 +197,7 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
             }
         }
     }
+    var showSupportChat by remember { mutableStateOf(false) }
 
     if (showArrivalDialog) {
         AlertDialog(
@@ -220,6 +221,14 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
             tripId = (tripState as TripState.Success).tripId,
             currentUserId = clientId,
             onDismiss = { showChatDialog = false }
+        )
+    }
+
+    if (showSupportChat && tripState is TripState.Success) {
+        SupportChatDialog(
+            userId = clientId,
+            tripId = (tripState as TripState.Success).tripId,
+            onDismiss = { showSupportChat = false }
         )
     }
 
@@ -272,6 +281,18 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
         }
     }
 
+    // Al restaurar un viaje activo, centrar cámara en el origen del viaje
+    LaunchedEffect(tripState) {
+        if (tripState is TripState.Success) {
+            val pickup = uiState.pickupPoint
+            if (pickup != null) {
+                cameraPositionState.animate(
+                    CameraUpdateFactory.newLatLngZoom(LatLng(pickup.latitude, pickup.longitude), 15f), 800
+                )
+            }
+        }
+    }
+
     // Estado del bottom sheet
     val sheetState = rememberBottomSheetScaffoldState(
         bottomSheetState = rememberStandardBottomSheetState(
@@ -301,7 +322,7 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
 
     BottomSheetScaffold(
         scaffoldState = sheetState,
-        sheetPeekHeight = if (mapSelectionMode != null) 0.dp else if (isImeVisible) screenHeight else if (isInActiveTrip || hasRoute) 450.dp else 200.dp,
+        sheetPeekHeight = if (mapSelectionMode != null) 0.dp else if (isImeVisible) screenHeight else if (isInActiveTrip) 240.dp else if (hasRoute) 450.dp else 200.dp,
         sheetDragHandle = {
             Box(
                 modifier = Modifier
@@ -323,21 +344,20 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
         containerColor = Color.Transparent,
         sheetContent = {
             BottomSheetContent(
+                clientId = clientId,
                 uiState = uiState,
                 tripState = tripState,
                 locationGranted = locationGranted,
-                onPickupQueryChange = viewModel::updatePickupQuery,
-                onDestinationQueryChange = viewModel::updateDestinationQuery,
-                onPickupPredictionSelect = { viewModel.selectPrediction(it, isPickup = true) },
-                onDestinationPredictionSelect = { viewModel.selectPrediction(it, isPickup = false) },
+                onPickupQueryChange = { viewModel.updatePickupQuery(it) },
+                onDestinationQueryChange = { viewModel.updateDestinationQuery(it) },
+                onPickupPredictionSelect = { viewModel.selectPickupPrediction(it, context) },
+                onDestinationPredictionSelect = { viewModel.selectDestinationPrediction(it, context) },
                 onSelectOnMap = { mapSelectionMode = it },
                 onUseMyLocation = {
                     if (locationGranted) {
                         fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
                             loc?.let {
-                                viewModel.setPickupPoint(
-                                    LocationPoint(it.latitude, it.longitude, "Mi ubicación")
-                                )
+                                viewModel.setPointFromMap(LatLng(it.latitude, it.longitude), context, isPickup = true)
                             }
                         }
                     } else {
@@ -348,7 +368,8 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
                     if (hasRoute) viewModel.confirmTrip(clientId, paymentMethod)
                 },
                 onCancelTrip = { viewModel.resetTrip() },
-                onChat = { showChatDialog = true }
+                onChat = { showChatDialog = true },
+                onSupportChat = { showSupportChat = true }
             )
         }
     ) { innerPadding ->
@@ -439,7 +460,8 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
                 },
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 16.dp, end = 16.dp)
+                    .statusBarsPadding()
+                    .padding(top = 12.dp, end = 12.dp)
                     .size(44.dp)
                     .zIndex(10f),
                 containerColor = MapCard,
@@ -450,44 +472,115 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
                 Icon(Icons.Filled.MyLocation, contentDescription = "Mi ubicación", modifier = Modifier.size(20.dp))
             }
 
-            // ── Indicadores de puntos seleccionados (top) ────────────────────
-            AnimatedVisibility(
-                visible = hasPickup || hasDestination,
-                enter = fadeIn() + slideInVertically(),
-                exit = fadeOut() + slideOutVertically(),
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 16.dp, top = 16.dp, end = 72.dp)
-                    .zIndex(10f)
-            ) {
+            if (isTripActive) {
+                val d = (tripState as TripState.Success).driver!!
                 Card(
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = MapCard.copy(alpha = 0.95f)),
-                    border = BorderStroke(1.dp, MapBorder)
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .fillMaxWidth()
+                        .zIndex(10f),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MapCard.copy(alpha = 0.96f)),
+                    border = BorderStroke(1.dp, MapBorder),
+                    elevation = CardDefaults.cardElevation(8.dp)
                 ) {
-                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                        if (hasPickup) {
-                            RoutePointRow(
-                                color = MapGreen,
-                                label = uiState.pickupPoint?.address ?: "Origen",
-                                icon = Icons.Filled.RadioButtonChecked
-                            )
-                        }
-                        if (hasPickup && hasDestination) {
-                            Box(
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Foto real del vehículo del conductor
+                        if (!d.vehiclePhotoUrl.isNullOrEmpty()) {
+                            coil.compose.AsyncImage(
+                                model = d.vehiclePhotoUrl,
+                                contentDescription = "Foto del vehículo",
+                                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                                 modifier = Modifier
-                                    .padding(start = 9.dp)
-                                    .width(2.dp)
-                                    .height(10.dp)
-                                    .background(MapBorder)
+                                    .size(80.dp, 54.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                            )
+                        } else {
+                            Vehicle3DView(
+                                vehicleType = d.vehicleType ?: "sedan",
+                                color = d.vehicleColor ?: "gris",
+                                modifier = Modifier.size(80.dp, 54.dp)
                             )
                         }
-                        if (hasDestination) {
-                            RoutePointRow(
-                                color = MapRed,
-                                label = uiState.destinationPoint?.address ?: "Destino",
-                                icon = Icons.Filled.LocationOn
+                        // Info unidad
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("UNIDAD ${d.unitNumber}", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = MapYellow, letterSpacing = 0.5.sp)
+                                val statusStr = when ((tripState as TripState.Success).status) {
+                                    "in_progress" -> "EN VIAJE"
+                                    "arrived"     -> "LLEGANDO"
+                                    else          -> "EN CAMINO"
+                                }
+                                val statusColor = if (statusStr == "EN VIAJE") MapBlue else if (statusStr == "LLEGANDO") MapYellow else MapGreen
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(statusColor.copy(0.15f))
+                                        .padding(horizontal = 6.dp, vertical = 1.dp)
+                                ) { Text(statusStr, fontSize = 9.sp, color = statusColor, fontWeight = FontWeight.Bold) }
+                            }
+                            Text(
+                                "${d.vehicleMake ?: ""} ${d.vehicleModel ?: ""} ${d.vehicleYear ?: ""}".trim(),
+                                fontSize = 13.sp, color = MapText, fontWeight = FontWeight.SemiBold, maxLines = 1
                             )
+                            Text(d.vehiclePlate, fontSize = 12.sp, color = MapSubText, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                        }
+                        // Chip de color
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .background(parseClientVehicleColor(d.vehicleColor ?: "gris"))
+                                .border(2.dp, MapBorder, CircleShape)
+                        )
+                    }
+                }
+            } else {
+                // Indicadores de puntos normales cuando no hay viaje
+                AnimatedVisibility(
+                    visible = hasPickup || hasDestination,
+                    enter = fadeIn() + slideInVertically(),
+                    exit = fadeOut() + slideOutVertically(),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 16.dp, top = 16.dp, end = 72.dp)
+                        .zIndex(10f)
+                ) {
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MapCard.copy(alpha = 0.95f)),
+                        border = BorderStroke(1.dp, MapBorder)
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                            if (hasPickup) {
+                                RoutePointRow(
+                                    color = MapGreen,
+                                    label = uiState.pickupPoint?.address ?: "Origen",
+                                    icon = Icons.Filled.RadioButtonChecked
+                                )
+                            }
+                            if (hasPickup && hasDestination) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(start = 9.dp)
+                                        .width(2.dp)
+                                        .height(10.dp)
+                                        .background(MapBorder)
+                                )
+                            }
+                            if (hasDestination) {
+                                RoutePointRow(
+                                    color = MapRed,
+                                    label = uiState.destinationPoint?.address ?: "Destino",
+                                    icon = Icons.Filled.LocationOn
+                                )
+                            }
                         }
                     }
                 }
@@ -568,6 +661,7 @@ private fun RoutePointRow(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BottomSheetContent(
+    clientId: String,
     uiState: TaxiUiState,
     tripState: TripState,
     locationGranted: Boolean,
@@ -579,7 +673,8 @@ private fun BottomSheetContent(
     onUseMyLocation: () -> Unit,
     onConfirm: (String) -> Unit,
     onCancelTrip: () -> Unit,
-    onChat: () -> Unit = {}
+    onChat: () -> Unit = {},
+    onSupportChat: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -590,33 +685,146 @@ private fun BottomSheetContent(
     if (tripState is TripState.Success) {
         val d = tripState.driver
         if (d != null) {
-            DriverAssignedScreen(
-                driver = AssignedDriverInfo(
-                    driverId = d.id,
-                    fullName = d.fullName,
-                    phone = d.phone,
-                    avatarUrl = d.avatarUrl,
-                    unitNumber = d.unitNumber,
-                    vehicleMake = d.vehicleMake ?: "",
-                    vehicleModel = d.vehicleModel ?: "",
-                    vehicleYear = d.vehicleYear,
-                    vehiclePlate = d.vehiclePlate,
-                    vehicleColor = d.vehicleColor ?: "gris",
-                    vehicleType = d.vehicleType ?: "sedan",
-                    vehiclePhotoUrl = d.vehiclePhotoUrl,
-                    rating = d.rating,
-                    totalTrips = d.totalTrips
-                ),
-                originAddress = uiState.pickupPoint?.address ?: "",
-                destAddress = uiState.destinationPoint?.address ?: "",
-                onCancel = onCancelTrip,
-                onContact = {
-                    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${d.phone}"))
-                    context.startActivity(intent)
-                },
-                onChat = onChat,
-                isBottomSheet = true
-            )
+            // ── Panel compacto en el bottom sheet ───────────────────────────
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Ruta origen → destino
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MapCardLight)
+                        .border(1.dp, MapBorder, RoundedCornerShape(12.dp))
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Box(Modifier.size(8.dp).clip(CircleShape).background(MapGreen))
+                            Text(
+                                uiState.pickupPoint?.address ?: "Origen",
+                                fontSize = 12.sp, color = MapText, maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Box(Modifier.padding(start = 3.dp).width(2.dp).height(10.dp).background(MapBorder))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Box(Modifier.size(8.dp).clip(CircleShape).background(MapRed))
+                            Text(
+                                uiState.destinationPoint?.address ?: "Destino",
+                                fontSize = 12.sp, color = MapText, maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    // Costo
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.Center) {
+                        Text("COSTO", fontSize = 9.sp, color = MapSubText, letterSpacing = 0.5.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            if (uiState.travelDistance != null) "Bs ${uiState.travelDistance}" else "—",
+                            fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = MapYellow
+                        )
+                    }
+                }
+
+                // Info conductor + botones
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Avatar
+                    Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                        if (!d.avatarUrl.isNullOrEmpty()) {
+                            coil.compose.AsyncImage(
+                                model = d.avatarUrl,
+                                contentDescription = null,
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier.size(44.dp).clip(CircleShape)
+                                    .border(2.dp, MapYellow, CircleShape)
+                            )
+                        } else {
+                            Box(
+                                Modifier.size(44.dp).clip(CircleShape)
+                                    .background(androidx.compose.ui.graphics.Brush.radialGradient(listOf(MapYellow, Color(0xFFE6A800)))),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(d.fullName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                                    fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF0D0D0D))
+                            }
+                        }
+                    }
+                    // Nombre y rating
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(d.fullName, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = MapText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Icon(Icons.Filled.Star, null, tint = MapYellow, modifier = Modifier.size(12.dp))
+                            Text("${d.rating}", fontSize = 12.sp, color = MapText, fontWeight = FontWeight.SemiBold)
+                            Text("· ${d.totalTrips} viajes", fontSize = 12.sp, color = MapSubText)
+                        }
+                    }
+                    // Botón Chat
+                    IconButton(
+                        onClick = onChat,
+                        modifier = Modifier.size(44.dp).clip(CircleShape)
+                            .background(MapCardLight)
+                            .border(1.dp, MapBorder, CircleShape)
+                    ) {
+                        Icon(Icons.Filled.Chat, null, tint = MapYellow, modifier = Modifier.size(20.dp))
+                    }
+                    // Botón Llamar
+                    IconButton(
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${d.phone}"))
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.size(44.dp).clip(CircleShape)
+                            .background(MapGreen)
+                    ) {
+                        Icon(Icons.Filled.Phone, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                }
+
+                // Fila de botones secundarios: Cancelar y SOS
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedButton(
+                        onClick = onSupportChat,
+                        modifier = Modifier.weight(1f).height(42.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MapBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MapSubText)
+                    ) {
+                        Text("Cancelar / Soporte", fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Button(
+                        onClick = {
+                            // Acción SOS
+                            val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
+                            scope.kotlinx.coroutines.launch {
+                                val req = SupportMessageRequest(
+                                    message = "🚨 ALERTA SOS 🚨 El cliente ha activado el botón de emergencia.",
+                                    senderRole = "client",
+                                    tripId = (tripState as TripState.Success).tripId,
+                                    type = "sos"
+                                )
+                                try {
+                                    RetrofitClient.apiService.sendSupportMessage(clientId, req)
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            }
+                            onSupportChat()
+                        },
+                        modifier = Modifier.width(80.dp).height(42.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MapRed)
+                    ) {
+                        Text("SOS", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                    }
+                }
+            }
             return
         } else {
             // Mostrar UI de "Esperando confirmación del conductor..."
@@ -1015,4 +1223,15 @@ private fun PredictionsList(
             }
         }
     }
+}
+
+private fun parseClientVehicleColor(color: String): androidx.compose.ui.graphics.Color = when (color.lowercase().trim()) {
+    "blanco", "white"           -> androidx.compose.ui.graphics.Color(0xFFF5F5F5)
+    "negro", "black"            -> androidx.compose.ui.graphics.Color(0xFF263238)
+    "rojo", "red"               -> androidx.compose.ui.graphics.Color(0xFFE53935)
+    "azul", "blue"              -> androidx.compose.ui.graphics.Color(0xFF1E88E5)
+    "gris", "gray", "grey"      -> androidx.compose.ui.graphics.Color(0xFF78909C)
+    "plata", "silver"           -> androidx.compose.ui.graphics.Color(0xFFB0BEC5)
+    "verde", "green"            -> androidx.compose.ui.graphics.Color(0xFF43A047)
+    else                        -> androidx.compose.ui.graphics.Color(0xFF78909C)
 }

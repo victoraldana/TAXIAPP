@@ -808,3 +808,67 @@ export const addTripMessage = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+// ──────────────────────────────────────────────────────────────────────────────
+// SOPORTE — obtener mensajes de un usuario con admin
+// ──────────────────────────────────────────────────────────────────────────────
+export const getSupportMessages = async (req, res) => {
+  const { userId } = req.params;
+  try {
+    await query(`UPDATE support_messages SET is_read = TRUE WHERE user_id = $1 AND sender_role != 'admin'`, [userId]);
+    const result = await query(`
+      SELECT sm.id, sm.user_id, sm.sender_role, sm.trip_id, sm.message, sm.type, sm.is_read, sm.created_at,
+             u.full_name AS user_name
+      FROM support_messages sm
+      JOIN users u ON sm.user_id = u.id
+      WHERE sm.user_id = $1
+      ORDER BY sm.created_at ASC
+    `, [userId]);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('getSupportMessages:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// SOPORTE — enviar mensaje
+// ──────────────────────────────────────────────────────────────────────────────
+export const sendSupportMessage = async (req, res) => {
+  const { userId } = req.params;
+  const { message, sender_role = 'client', trip_id = null, type = 'support' } = req.body;
+  if (!message) return res.status(400).json({ success: false, message: 'message es requerido' });
+  try {
+    const result = await query(`
+      INSERT INTO support_messages (user_id, sender_role, trip_id, message, type)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `, [userId, sender_role, trip_id, message, type]);
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    console.error('sendSupportMessage:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// SOPORTE ADMIN — listar todos los tickets (conversaciones únicas por usuario)
+// ──────────────────────────────────────────────────────────────────────────────
+export const getSupportTickets = async (_req, res) => {
+  try {
+    const result = await query(`
+      SELECT DISTINCT ON (sm.user_id)
+             sm.user_id, u.full_name, u.phone, sm.message AS last_message,
+             sm.type, sm.created_at,
+             COUNT(*) FILTER (WHERE sm.is_read = FALSE AND sm.sender_role != 'admin')
+               OVER (PARTITION BY sm.user_id) AS unread_count
+      FROM support_messages sm
+      JOIN users u ON sm.user_id = u.id
+      ORDER BY sm.user_id, sm.created_at DESC
+    `);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('getSupportTickets:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};

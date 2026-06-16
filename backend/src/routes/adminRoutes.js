@@ -5,7 +5,8 @@ import {
   getQueue, addToQueue, removeFromQueue, moveInQueue,
   listTrips, assignNextDriver, createTrip, rejectTrip, finishTrip,
   getTripStatus, rateDriver, notifyArrival, acceptTrip,
-  getClientTrips, getDriverTrips, getTripMessages, addTripMessage
+  getClientTrips, getDriverTrips, getTripMessages, addTripMessage,
+  getSupportMessages, sendSupportMessage, getSupportTickets
 } from '../controllers/adminController.js';
 
 const router = express.Router();
@@ -50,5 +51,9 @@ router.patch('/trips/:tripId/accept',         acceptTrip);             // conduc
 router.get('/trips/:tripId/messages',         getTripMessages);
 router.post('/trips/:tripId/messages',        addTripMessage);
 
-export default router;
+// Chat de soporte (SOS / cancelación / soporte general)
+router.get('/support/tickets',                getSupportTickets);         // admin: todos los tickets
+router.get('/support/:userId/messages',       getSupportMessages);        // user/admin: historial
+router.post('/support/:userId/messages',      sendSupportMessage);        // user/admin: enviar msg
 
+export default router;
