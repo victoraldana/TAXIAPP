@@ -4,16 +4,27 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.taxi.model.UserRole
+import com.example.taxi.network.RetrofitClient
 import com.example.taxi.ui.ClientSearchScreen
 import com.example.taxi.ui.DriverHomeScreen
 import com.example.taxi.ui.HomeScreen
@@ -54,18 +65,50 @@ fun TaxiNavGraph() {
     val authViewModel: AuthViewModel     = viewModel()
     val driverViewModel: DriverViewModel = viewModel()
 
-    // Cargar sesión
-    val startDest = remember {
+    // ── Estado de arranque: calculamos destino inicial de forma asíncrona ─────
+    // Para el cliente necesitamos saber si tiene un viaje activo antes de decidir
+    // si navegamos a "home" o directamente a "client_search".
+    var startDest by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
         val user = sessionManager.getUser()
-        if (user != null) {
-            authViewModel.setLoggedUser(user)
-            if (user.role == "driver") "driver_home" else "home"
+        if (user == null) {
+            startDest = "login"
+            return@LaunchedEffect
+        }
+        authViewModel.setLoggedUser(user)
+
+        if (user.role == "driver") {
+            startDest = "driver_home"
         } else {
-            "login"
+            // Para el cliente: verificar si tiene viaje activo en el backend
+            val dest = try {
+                val res = RetrofitClient.apiService.getActiveTripForClient(user.id)
+                if (res.isSuccessful && res.body()?.data != null) {
+                    "client_search"  // Hay viaje activo → ir directo a la pantalla del viaje
+                } else {
+                    "home"
+                }
+            } catch (e: Exception) {
+                "home"  // En caso de error de red, ir a home normalmente
+            }
+            startDest = dest
         }
     }
 
-    NavHost(navController = navController, startDestination = startDest) {
+    // Mostrar pantalla de carga hasta que sepamos a dónde ir
+    if (startDest == null) {
+        Box(
+            modifier = Modifier.fillMaxSize()
+                .background(Color(0xFF0F1923)),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = Color(0xFFFFC107))
+        }
+        return
+    }
+
+    NavHost(navController = navController, startDestination = startDest!!) {
 
         // ── Login ─────────────────────────────────────────────────────────────
         composable("login") {

@@ -421,8 +421,18 @@ class TaxiViewModel : ViewModel() {
                                 }
                             }
                         } else if (status == "cancelled_no_drivers") {
+                            locationPollingJob?.cancel()
+                            _driverLocation.value = null
                             _tripState.value = TripState.Error("No hay conductores disponibles. Intenta de nuevo más tarde.")
                             tripStatusPollingJob?.cancel()
+                            break
+                        } else if (status == "cancelled") {
+                            locationPollingJob?.cancel()
+                            _driverLocation.value = null
+                            val reason = data.cancelReason ?: "Tu viaje fue cancelado por el administrador."
+                            _tripState.value = TripState.Error("Viaje cancelado: $reason")
+                            tripStatusPollingJob?.cancel()
+                            break
                         }
                     }
                 } catch (e: Exception) {

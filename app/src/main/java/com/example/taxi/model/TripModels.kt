@@ -55,6 +55,11 @@ data class LocationData(
     val lng: Double
 )
 
+// ─── Cancelación de Viaje ──────────────────────────────────────────────────────
+data class CancelTripRequest(
+    val reason: String
+)
+
 // ─── Trip status (cliente hace polling) ──────────────────────────────────────
 data class TripStatusResponse(
     val success: Boolean,
@@ -64,8 +69,9 @@ data class TripStatusResponse(
 data class TripStatusData(
     val id: String,
     val status: String,          // "pending" | "accepted" | "completed" | "cancelled"
-    @SerializedName("driver_name")   val driverName: String?,
-    @SerializedName("driver_rating") val driverRating: Double?,
+    @SerializedName("driver_name")    val driverName: String?,
+    @SerializedName("driver_rating")  val driverRating: Double?,
+    @SerializedName("cancel_reason")  val cancelReason: String? = null,
     val driver: DriverData? = null
 )
 

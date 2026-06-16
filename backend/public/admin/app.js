@@ -346,19 +346,26 @@ async function loadTrips() {
       return trips.map(t => `
       <tr>
         <td style="font-family:monospace;font-size:11px;color:var(--sub)">${t.id.slice(0,8)}...</td>
-        <td style="font-size:13px">${t.client_name||'—'}<br><span style="color:var(--sub);font-size:11px">${t.client_phone||''}</span></td>
+        <td style="font-size:13px">${t.client_name||'&mdash;'}<br><span style="color:var(--sub);font-size:11px">${t.client_phone||''}</span></td>
         <td style="font-size:13px">${t.driver_name||'<span style="color:var(--sub)">Sin asignar</span>'}</td>
-        <td>${t.unit_number ? `<span class="badge badge-yellow">N° ${t.unit_number}</span>` : '—'}</td>
+        <td>${t.unit_number ? `<span class="badge badge-yellow">N° ${t.unit_number}</span>` : '&mdash;'}</td>
         <td style="font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.origin_address}">${t.origin_address}</td>
         <td style="font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.dest_address}">${t.dest_address}</td>
         <td>${tripBadge(t.status)}</td>
         <td style="font-size:12px;color:var(--sub)">${new Date(t.created_at).toLocaleString('es')}</td>
         <td>
-          ${t.status==='pending'&&!t.driver_id
-            ? `<button class="btn-sm" onclick="assignDriver('${t.id}')">🚕 Asignar</button>`
-            : ''}
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${t.status==='pending'&&!t.driver_id
+              ? `<button class="btn-sm" onclick="assignDriver('${t.id}')">&#x1F695; Asignar</button>`
+              : ''}
+            ${['pending','accepted','arrived','on_route','in_progress'].includes(t.status)
+              ? `<button class="btn-sm danger" onclick="openCancelTripModal('${t.id}','${(t.client_name||'').replace(/'/g,'\\&apos;')}')">&#x274C; Cancelar</button>`
+              : (t.status === 'cancelled' && t.cancel_reason
+                ? `<span style="font-size:11px;color:var(--red);max-width:120px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.cancel_reason}">&#x26D4; ${t.cancel_reason}</span>`
+                : '')}
+          </div>
         </td>
-      </tr>`).join('');
+      </tr>`);
     };
 
     document.getElementById('tripsBodyPending').innerHTML = renderRows(pending, 'No hay viajes pendientes');
@@ -375,6 +382,41 @@ async function assignDriver(tripId) {
     loadTrips();
     loadDashboard();
   } catch (e) { toast(e.message, 'error'); }
+}
+
+// ─── Cancelar viaje (admin) ──────────────────────────────────────────────────────────────────────────────
+let _cancelTripId = null;
+
+function openCancelTripModal(tripId, clientName) {
+  _cancelTripId = tripId;
+  document.getElementById('cancelTripClientName').textContent = clientName || tripId.slice(0,8);
+  document.getElementById('cancelReasonInput').value = '';
+  openModal('modalCancelTrip');
+}
+
+async function submitCancelTrip() {
+  if (!_cancelTripId) return;
+  const reason = document.getElementById('cancelReasonInput').value.trim();
+  if (!reason) { toast('Por favor ingresa el motivo de cancelación', 'error'); return; }
+  const btn = document.getElementById('confirmCancelBtn');
+  btn.disabled = true;
+  btn.textContent = 'Cancelando...';
+  try {
+    await api(`/trips/${_cancelTripId}/cancel`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason })
+    });
+    toast('Viaje cancelado correctamente');
+    closeModal('modalCancelTrip');
+    _cancelTripId = null;
+    loadTrips();
+    loadDashboard();
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Confirmar cancelación';
+  }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

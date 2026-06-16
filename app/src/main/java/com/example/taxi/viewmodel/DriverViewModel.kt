@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -48,6 +49,10 @@ sealed class DriverTripState {
         val destLng: Double = 0.0,
         val hasArrived: Boolean = false
     ) : DriverTripState()
+
+    data class CancelledByAdmin(
+        val reason: String
+    ) : DriverTripState()
 }
 
 class DriverViewModel : ViewModel() {
@@ -75,10 +80,12 @@ class DriverViewModel : ViewModel() {
         .create(DirectionsService::class.java)
 
     private var pollingActive = false
+    private var cancelPollingJob: Job? = null
 
     // ── Inicializar: cargar estado del conductor y empezar polling ────────────
     fun init(driverId: String) {
         viewModelScope.launch {
+            // 1. Cargar estado de cola
             try {
                 val res = RetrofitClient.apiService.getDriverQueueStatus(driverId)
                 if (res.isSuccessful) {
@@ -87,8 +94,66 @@ class DriverViewModel : ViewModel() {
                     _queuePosition.value = data?.queuePosition
                 }
             } catch (e: Exception) {
-                Log.e("DriverViewModel", "init error: ${e.message}")
+                Log.e("DriverViewModel", "init queue error: ${e.message}")
             }
+
+            // 2. Restaurar viaje activo si existe (independientemente de si está en cola)
+            //    Un conductor con viaje activo NO está en la cola, por eso isOnline=false.
+            //    Necesitamos verificar explícitamente antes de arrancar el polling.
+            try {
+                val tripRes = RetrofitClient.apiService.getPendingTrip(driverId)
+                if (tripRes.isSuccessful) {
+                    val trip = tripRes.body()?.data
+                    if (trip != null && _tripState.value is DriverTripState.Idle) {
+                        when (trip.status) {
+                            "pending" -> {
+                                _tripState.value = DriverTripState.TripAssigned(
+                                    tripId        = trip.tripId,
+                                    clientName    = trip.clientName ?: "Cliente",
+                                    originAddress = trip.originAddress,
+                                    destAddress   = trip.destAddress,
+                                    distanceKm    = trip.distanceKm,
+                                    estimatedFare = trip.estimatedFare,
+                                    paymentMethod = trip.paymentMethod,
+                                    originLat     = trip.originLat,
+                                    originLng     = trip.originLng,
+                                    destLat       = trip.destLat,
+                                    destLng       = trip.destLng
+                                )
+                            }
+                            "accepted", "in_progress", "arrived" -> {
+                                _tripState.value = DriverTripState.TripActive(
+                                    tripId        = trip.tripId,
+                                    clientName    = trip.clientName ?: "Cliente",
+                                    originAddress = trip.originAddress,
+                                    destAddress   = trip.destAddress,
+                                    distanceKm    = trip.distanceKm,
+                                    paymentMethod = trip.paymentMethod,
+                                    originLat     = trip.originLat,
+                                    originLng     = trip.originLng,
+                                    destLat       = trip.destLat,
+                                    destLng       = trip.destLng,
+                                    hasArrived    = trip.status == "arrived" || trip.status == "in_progress"
+                                )
+                                // Recalcular ruta origen→destino al restaurar
+                                fetchRoute(
+                                    origin = "${trip.originLat},${trip.originLng}",
+                                    dest   = "${trip.destLat},${trip.destLng}",
+                                    forDriverLeg = false
+                                )
+                                // El conductor tiene viaje activo → marcarlo como online lógicamente
+                                _isOnline.value = true
+                                // Monitorear cancelación por admin
+                                startCancelPolling(trip.tripId)
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("DriverViewModel", "init trip restore error: ${e.message}")
+            }
+
+            // 3. Iniciar polling continuo
             startTripPolling(driverId)
         }
     }
@@ -160,6 +225,8 @@ class DriverViewModel : ViewModel() {
                             destLat       = current.destLat,
                             destLng       = current.destLng
                         )
+                        // Monitorear cancelación por admin
+                        startCancelPolling(current.tripId)
                     }
                 }
             } catch (e: Exception) {
@@ -182,6 +249,7 @@ class DriverViewModel : ViewModel() {
                 Log.e("DriverViewModel", "rejectTrip error: ${e.message}")
             }
             _tripState.value = DriverTripState.Idle
+            cancelPollingJob?.cancel()
         }
     }
 
@@ -215,6 +283,23 @@ class DriverViewModel : ViewModel() {
             _driverToOriginRoute.value = emptyList()
             _originToDestRoute.value   = emptyList()
             _tripState.value           = DriverTripState.Idle
+            cancelPollingJob?.cancel()
+        }
+    }
+
+    // ── Cancelar viaje por el conductor ───────────────────────────────────────
+    fun cancelTrip(tripId: String, driverId: String, reason: String) {
+        viewModelScope.launch {
+            try {
+                val finalReason = if (reason.isBlank()) "Cancelado por el conductor." else reason
+                RetrofitClient.apiService.cancelTrip(
+                    tripId, 
+                    com.example.taxi.model.CancelTripRequest(finalReason)
+                )
+            } catch (e: Exception) {
+                Log.e("DriverViewModel", "cancelTrip error: ${e.message}")
+            }
+            resetToIdle(driverId)
         }
     }
 
@@ -311,8 +396,53 @@ class DriverViewModel : ViewModel() {
         }
     }
 
+    // ── Polling: verificar si el viaje activo fue cancelado por el admin ──────
+    fun startCancelPolling(tripId: String) {
+        cancelPollingJob?.cancel()
+        cancelPollingJob = viewModelScope.launch {
+            while (true) {
+                delay(5000)
+                try {
+                    val res = RetrofitClient.apiService.getTripStatus(tripId)
+                    if (res.isSuccessful) {
+                        val status = res.body()?.data?.status
+                        val reason = res.body()?.data?.cancelReason
+                        if (status == "cancelled") {
+                            _driverToOriginRoute.value = emptyList()
+                            _originToDestRoute.value   = emptyList()
+                            _tripState.value = DriverTripState.CancelledByAdmin(
+                                reason = reason ?: "El administrador canceló el viaje."
+                            )
+                            break
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("DriverViewModel", "cancelPolling error: ${e.message}")
+                }
+            }
+        }
+    }
+
+    // ── Restablecer a Idle (después de cancelación por admin) ─────────────────
+    fun resetToIdle(driverId: String) {
+        cancelPollingJob?.cancel()
+        _driverToOriginRoute.value = emptyList()
+        _originToDestRoute.value   = emptyList()
+        viewModelScope.launch {
+            try {
+                val res = RetrofitClient.apiService.addDriverToQueue(driverId)
+                if (res.isSuccessful) _queuePosition.value = res.body()?.position
+                _isOnline.value = true
+            } catch (e: Exception) {
+                Log.e("DriverViewModel", "resetToIdle error: ${e.message}")
+            }
+            _tripState.value = DriverTripState.Idle
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         pollingActive = false
+        cancelPollingJob?.cancel()
     }
 }

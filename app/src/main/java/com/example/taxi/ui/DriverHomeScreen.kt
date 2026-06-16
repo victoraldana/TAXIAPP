@@ -108,7 +108,9 @@ fun DriverHomeScreen(
     val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(tripState) {
-        if (tripState is DriverTripState.Idle || tripState is DriverTripState.TripAssigned) {
+        if (tripState is DriverTripState.Idle
+            || tripState is DriverTripState.TripAssigned
+            || tripState is DriverTripState.CancelledByAdmin) {
             isNavigating = false
         }
     }
@@ -139,6 +141,8 @@ fun DriverHomeScreen(
     }
 
     var showChatDialog by remember { mutableStateOf(false) }
+    var showDriverCancelDialog by remember { mutableStateOf(false) }
+
     if (showChatDialog && tripState is DriverTripState.TripActive) {
         val activeTrip = tripState as DriverTripState.TripActive
         TripChatDialog(
@@ -283,9 +287,106 @@ fun DriverHomeScreen(
                     onChat = { showChatDialog = true },
                     onToggleNavigation = { isNavigating = !isNavigating },
                     onSupportChat = { showSupportChat = true },
+                    onCancelTrip = { showDriverCancelDialog = true },
                     driverId = driver.id
                 )
+                is DriverTripState.CancelledByAdmin -> {
+                    // Mostrar pantallazo vacío mientras el diálogo está sobre el mapa
+                    Box(modifier = Modifier.fillMaxWidth()) {}
+                }
             }
+        }
+
+        // ── Diálogo de cancelación por admin ──────────────────────────────────────────────────────────────────────────────
+        if (tripState is DriverTripState.CancelledByAdmin) {
+            val cancelState = tripState as DriverTripState.CancelledByAdmin
+            AlertDialog(
+                onDismissRequest = { /* no dismissible */ },
+                containerColor = Color(0xFF1A1A2E),
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("⛔", fontSize = 24.sp)
+                        Text("Viaje Cancelado", color = DrvRed, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    }
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "El administrador ha cancelado este viaje.",
+                            color = DrvText, fontSize = 14.sp
+                        )
+                        Surface(
+                            color = DrvRed.copy(alpha = 0.12f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "📋 Motivo: ${cancelState.reason}",
+                                color = DrvRed,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+                        Text(
+                            text = "Regresarás a la cola de espera.",
+                            color = DrvSub, fontSize = 12.sp
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { viewModel.resetToIdle(driver.id) },
+                        colors = ButtonDefaults.buttonColors(containerColor = DrvYellow)
+                    ) {
+                        Text("Entendido", color = Color.Black, fontWeight = FontWeight.Bold)
+                    }
+                }
+            )
+        }
+
+        // ── Diálogo de cancelación por el conductor ──────────────────────────────────────────────────────────────────
+        if (showDriverCancelDialog && tripState is DriverTripState.TripActive) {
+            val activeTrip = tripState as DriverTripState.TripActive
+            var cancelReason by remember { mutableStateOf("") }
+            AlertDialog(
+                onDismissRequest = { showDriverCancelDialog = false },
+                containerColor = DrvCard,
+                title = { Text("Cancelar Viaje", color = DrvRed, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("¿Estás seguro de que deseas cancelar este viaje?", color = DrvText, fontSize = 14.sp)
+                        OutlinedTextField(
+                            value = cancelReason,
+                            onValueChange = { cancelReason = it },
+                            label = { Text("Motivo (opcional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = DrvText,
+                                unfocusedTextColor = DrvText,
+                                focusedBorderColor = DrvRed,
+                                unfocusedBorderColor = DrvBorder
+                            ),
+                            maxLines = 3
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.cancelTrip(activeTrip.tripId, driver.id, cancelReason)
+                            showDriverCancelDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = DrvRed)
+                    ) {
+                        Text("Confirmar", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDriverCancelDialog = false }) {
+                        Text("Volver", color = DrvSub)
+                    }
+                }
+            )
         }
 
         // ── FAB MI UBICACIÓN ─────────────────────────────────────────────────
@@ -620,6 +721,7 @@ private fun TripActivePanel(
     onChat: () -> Unit,
     onToggleNavigation: () -> Unit,
     onSupportChat: () -> Unit,
+    onCancelTrip: () -> Unit,
     driverId: String
 ) {
     Column(
@@ -747,6 +849,19 @@ private fun TripActivePanel(
                 ) {
                     Text("Finalizar", fontWeight = FontWeight.ExtraBold, color = Color.White, fontSize = 14.sp)
                 }
+            }
+        }
+        
+        // Botón Cancelar Viaje
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center
+        ) {
+            TextButton(
+                onClick = onCancelTrip,
+                colors = ButtonDefaults.textButtonColors(contentColor = DrvRed)
+            ) {
+                Text("Cancelar Viaje", fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
         }
     }

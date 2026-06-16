@@ -624,13 +624,58 @@ export const finishTrip = async (req, res) => {
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
+// VIAJES — cancelar viaje (admin)
+// ──────────────────────────────────────────────────────────────────────────────
+export const cancelTrip = async (req, res) => {
+  const { tripId } = req.params;
+  const { reason = 'Cancelado por administrador' } = req.body;
+  try {
+    const tripRes = await query(
+      `UPDATE trips
+         SET status='cancelled', cancel_reason=$1, cancelled_at=NOW()
+       WHERE id=$2
+         AND status IN ('pending','accepted','arrived','on_route','in_progress')
+       RETURNING id, driver_id`,
+      [reason, tripId]
+    );
+    if (tripRes.rows.length === 0)
+      return res.status(404).json({ success: false, message: 'Viaje no encontrado o ya finalizado.' });
+
+    const driverId = tripRes.rows[0].driver_id;
+
+    // Si había conductor asignado, restaurarlo al final de la cola
+    if (driverId) {
+      await query('UPDATE driver_profiles SET is_available=TRUE WHERE user_id=$1', [driverId]);
+      const existing = await query(
+        'SELECT id FROM driver_queue WHERE driver_id=$1 AND is_active=TRUE', [driverId]
+      );
+      if (existing.rows.length === 0) {
+        const maxPos = await query(
+          'SELECT COALESCE(MAX(queue_position),0) AS max_pos FROM driver_queue WHERE is_active=TRUE'
+        );
+        const nextPos = parseInt(maxPos.rows[0].max_pos) + 1;
+        await query(
+          'INSERT INTO driver_queue (driver_id, queue_position) VALUES ($1,$2)',
+          [driverId, nextPos]
+        );
+      }
+    }
+
+    res.json({ success: true, message: 'Viaje cancelado correctamente.', cancel_reason: reason });
+  } catch (err) {
+    console.error('cancelTrip:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
 // VIAJES — obtener estado (cliente hace polling para detectar finalización)
 // ──────────────────────────────────────────────────────────────────────────────
 export const getTripStatus = async (req, res) => {
   const { tripId } = req.params;
   try {
     const result = await query(
-      `SELECT t.id, t.status, t.driver_id
+      `SELECT t.id, t.status, t.driver_id, t.cancel_reason
        FROM trips t
        WHERE t.id = $1`,
       [tripId]
