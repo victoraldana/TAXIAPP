@@ -440,8 +440,8 @@ class TaxiViewModel : ViewModel() {
                             break
                         }
                         
-                        if (data.cancelRequestStatus != _cancelRequestStatus.value) {
-                            _cancelRequestStatus.value = data.cancelRequestStatus
+                        if (data?.cancelRequestStatus != _cancelRequestStatus.value) {
+                            _cancelRequestStatus.value = data?.cancelRequestStatus
                         }
                     }
                 } catch (e: Exception) {

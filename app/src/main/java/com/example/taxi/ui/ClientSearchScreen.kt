@@ -418,7 +418,9 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
                 },
                 onCancelTrip = { viewModel.resetTrip() },
                 onChat = { showChatDialog = true },
-                onSupportChat = { showSupportChat = true }
+                onSupportChat = { showSupportChat = true },
+                cancelRequestStatus = cancelRequestStatus,
+                onRequestCancel = { showCancelConfirmDialog = true }
             )
         }
     ) { innerPadding ->
@@ -723,7 +725,9 @@ private fun BottomSheetContent(
     onConfirm: (String) -> Unit,
     onCancelTrip: () -> Unit,
     onChat: () -> Unit = {},
-    onSupportChat: () -> Unit = {}
+    onSupportChat: () -> Unit = {},
+    cancelRequestStatus: String? = null,
+    onRequestCancel: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -850,7 +854,7 @@ private fun BottomSheetContent(
                         }
                     } else {
                         OutlinedButton(
-                            onClick = { showCancelConfirmDialog = true },
+                            onClick = onRequestCancel,
                             modifier = Modifier.weight(1f).height(42.dp),
                             shape = RoundedCornerShape(12.dp),
                             border = BorderStroke(1.dp, MapRed),
