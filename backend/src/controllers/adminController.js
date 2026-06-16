@@ -356,6 +356,8 @@ export const assignNextDriver = async (req, res) => {
       );
     });
 
+    await reorderQueue();
+
     // Obtener datos completos del conductor para respuesta
     const driverData = await query(`
       SELECT u.id, u.full_name, u.phone, u.avatar_url,
@@ -422,6 +424,7 @@ export const createTrip = async (req, res) => {
         await client.query('UPDATE driver_queue SET is_active=FALSE WHERE id=$1', [queue_id]);
         await client.query('UPDATE driver_profiles SET is_available=FALSE WHERE user_id=$1', [driver_id]);
       });
+      await reorderQueue();
     }
 
     res.status(201).json({
@@ -588,6 +591,7 @@ export const rejectTrip = async (req, res) => {
         await client.query('UPDATE driver_queue SET is_active=FALSE WHERE id=$1', [queue_id]);
         await client.query('UPDATE driver_profiles SET is_available=FALSE WHERE user_id=$1', [driver_id]);
       });
+      await reorderQueue();
       res.json({ success: true, message: 'Viaje asignado al siguiente conductor.' });
     } else {
       await query(`UPDATE trips SET status='cancelled_no_drivers', driver_id=NULL WHERE id=$1`, [tripId]);
