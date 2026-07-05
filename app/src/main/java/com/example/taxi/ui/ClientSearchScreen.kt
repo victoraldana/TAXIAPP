@@ -156,6 +156,15 @@ fun ClientSearchScreen(viewModel: TaxiViewModel, clientId: String, onTripFinishe
     var showChatDialog by remember { mutableStateOf(false) }
     var showCancelConfirmDialog by remember { mutableStateOf(false) }
 
+    LaunchedEffect(Unit) {
+        viewModel.newMessageEvent.collect {
+            if (!showChatDialog) {
+                com.example.taxi.utils.SoundUtils.playNotificationSound(context)
+                android.widget.Toast.makeText(context, "Nuevo mensaje en el chat", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     if (cancelRequestStatus == "rejected") {
         AlertDialog(
             onDismissRequest = { viewModel.resetCancelRequestStatus() },

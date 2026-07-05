@@ -23,6 +23,7 @@ import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -70,6 +71,10 @@ class TaxiViewModel : ViewModel() {
     
     private var locationPollingJob: Job? = null
     private var tripStatusPollingJob: Job? = null
+
+    private val _newMessageEvent = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.BUFFERED)
+    val newMessageEvent = _newMessageEvent.receiveAsFlow()
+    private var lastMessageCount = 0
 
     private var placesClient: PlacesClient? = null
     private var sessionToken: AutocompleteSessionToken? = null
@@ -443,6 +448,14 @@ class TaxiViewModel : ViewModel() {
                         if (data?.cancelRequestStatus != _cancelRequestStatus.value) {
                             _cancelRequestStatus.value = data?.cancelRequestStatus
                         }
+                        
+                        val currentMsgs = data?.totalMessages ?: 0
+                        if (currentMsgs > lastMessageCount) {
+                            if (lastMessageCount > 0) {
+                                _newMessageEvent.trySend(Unit)
+                            }
+                            lastMessageCount = currentMsgs
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e("TaxiViewModel", "Error polling trip status: ${e.message}")
@@ -489,5 +502,6 @@ class TaxiViewModel : ViewModel() {
         _driverLocation.value = null
         _tripState.value      = TripState.Idle
         _uiState.value        = TaxiUiState()
+        lastMessageCount      = 0
     }
 }

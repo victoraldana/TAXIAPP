@@ -150,6 +150,15 @@ fun DriverHomeScreen(
         )
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.newMessageEvent.collect {
+            if (!showChatDialog) {
+                com.example.taxi.utils.SoundUtils.playNotificationSound(context)
+                android.widget.Toast.makeText(context, "Nuevo mensaje en el chat", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     // Centrar mapa en mi ubicación al inicio
     LaunchedEffect(locationGranted) {
         if (locationGranted) {

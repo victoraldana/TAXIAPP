@@ -73,6 +73,7 @@ data class TripStatusData(
     @SerializedName("driver_rating")  val driverRating: Double?,
     @SerializedName("cancel_reason")  val cancelReason: String? = null,
     @SerializedName("cancel_request_status") val cancelRequestStatus: String? = null,
+    @SerializedName("total_messages") val totalMessages: Int? = 0,
     val driver: DriverData? = null
 )
 

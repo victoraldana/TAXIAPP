@@ -136,7 +136,8 @@ export const loginByPhone = async (req, res) => {
     if (user.role === 'driver') {
       const dp = await query(
         `SELECT vehicle_make, vehicle_model, vehicle_plate, vehicle_color,
-                vehicle_type, is_available, is_approved, rating, total_trips
+                vehicle_type, is_available, is_approved, rating, total_trips,
+                pago_movil_cedula, pago_movil_telefono, pago_movil_banco
          FROM driver_profiles WHERE user_id = $1`,
         [user.id]
       );
@@ -192,6 +193,7 @@ export const register = async (req, res) => {
   const {
     phone, password, full_name, cedula, birth_date,
     email, selfie_url, id_doc_url, role = 'client',
+    pago_movil_cedula, pago_movil_telefono, pago_movil_banco,
   } = req.body;
 
   if (!phone) {
@@ -267,6 +269,20 @@ export const register = async (req, res) => {
 
       if (role === 'driver') {
         await client.query('INSERT INTO driver_profiles (user_id) VALUES ($1)', [newUser.id]);
+        // Guardar datos de pago móvil si se proporcionaron
+        if (pago_movil_cedula || pago_movil_telefono || pago_movil_banco) {
+          await client.query(
+            `UPDATE driver_profiles
+             SET pago_movil_cedula = $1, pago_movil_telefono = $2, pago_movil_banco = $3
+             WHERE user_id = $4`,
+            [
+              pago_movil_cedula || null,
+              pago_movil_telefono || null,
+              pago_movil_banco || null,
+              newUser.id,
+            ]
+          );
+        }
       } else {
         await client.query('INSERT INTO client_profiles (user_id) VALUES ($1)', [newUser.id]);
       }

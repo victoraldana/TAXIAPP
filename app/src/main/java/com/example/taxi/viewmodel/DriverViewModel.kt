@@ -12,6 +12,7 @@ import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -62,6 +63,10 @@ class DriverViewModel : ViewModel() {
 
     private val _cancelRequestStatus = MutableStateFlow<String?>(null)
     val cancelRequestStatus: StateFlow<String?> = _cancelRequestStatus.asStateFlow()
+
+    private val _newMessageEvent = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.BUFFERED)
+    val newMessageEvent = _newMessageEvent.receiveAsFlow()
+    private var lastMessageCount = 0
 
     private val _isOnline     = MutableStateFlow(false)
     val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()
@@ -418,6 +423,19 @@ class DriverViewModel : ViewModel() {
                             )
                             break
                         }
+                        
+                        val reqStatus = res.body()?.data?.cancelRequestStatus
+                        if (reqStatus != _cancelRequestStatus.value) {
+                            _cancelRequestStatus.value = reqStatus
+                        }
+                        
+                        val currentMsgs = res.body()?.data?.totalMessages ?: 0
+                        if (currentMsgs > lastMessageCount) {
+                            if (lastMessageCount > 0) {
+                                _newMessageEvent.trySend(Unit)
+                            }
+                            lastMessageCount = currentMsgs
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e("DriverViewModel", "cancelPolling error: ${e.message}")
@@ -446,6 +464,8 @@ class DriverViewModel : ViewModel() {
         cancelPollingJob?.cancel()
         _driverToOriginRoute.value = emptyList()
         _originToDestRoute.value   = emptyList()
+        _cancelRequestStatus.value = null
+        lastMessageCount = 0
         viewModelScope.launch {
             try {
                 val res = RetrofitClient.apiService.addDriverToQueue(driverId)

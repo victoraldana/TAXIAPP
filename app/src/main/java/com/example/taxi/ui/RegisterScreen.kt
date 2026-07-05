@@ -46,9 +46,10 @@ enum class RegStep {
     PHONE_INPUT,        // 1. Ingresar teléfono
     PHONE_OTP,          // 2. Verificar OTP teléfono
     PERSONAL_DATA,      // 3. Nombre, cédula, fecha nacimiento
-    EMAIL_INPUT,        // 4. Ingresar correo
-    EMAIL_OTP,          // 5. Verificar OTP email
-    PHOTO_KYC           // 6. Selfie + foto cédula
+    PAGO_MOVIL,         // 4. Pago Móvil (solo conductores)
+    EMAIL_INPUT,        // 5. Ingresar correo
+    EMAIL_OTP,          // 6. Verificar OTP email
+    PHOTO_KYC           // 7. Selfie + foto cédula
 }
 
 // ─── Pantalla principal de Registro ──────────────────────────────────────────
@@ -69,6 +70,10 @@ fun RegisterScreen(
     var email     by remember { mutableStateOf("") }
     var selfieUri by remember { mutableStateOf<Uri?>(null) }
     var idDocUri  by remember { mutableStateOf<Uri?>(null) }
+    // Pago Móvil
+    var pmCedula    by remember { mutableStateOf("") }
+    var pmTelefono  by remember { mutableStateOf("") }
+    var pmBanco     by remember { mutableStateOf("") }
 
     val authState by viewModel.authState.collectAsState()
     val otpState  by viewModel.otpState.collectAsState()
@@ -100,12 +105,14 @@ fun RegisterScreen(
             // Header con progreso
             RegHeader(
                 step = step,
+                role = selectedRole,
                 onBack = {
                     when (step) {
                         RegStep.PHONE_INPUT   -> onBack()
                         RegStep.PHONE_OTP     -> { step = RegStep.PHONE_INPUT; viewModel.clearOtpState() }
                         RegStep.PERSONAL_DATA -> step = RegStep.PHONE_OTP
-                        RegStep.EMAIL_INPUT   -> step = RegStep.PERSONAL_DATA
+                        RegStep.PAGO_MOVIL    -> step = RegStep.PERSONAL_DATA
+                        RegStep.EMAIL_INPUT   -> step = if (selectedRole == UserRole.DRIVER) RegStep.PAGO_MOVIL else RegStep.PERSONAL_DATA
                         RegStep.EMAIL_OTP     -> { step = RegStep.EMAIL_INPUT; viewModel.clearOtpState() }
                         RegStep.PHOTO_KYC     -> step = RegStep.EMAIL_OTP
                     }
@@ -148,6 +155,15 @@ fun RegisterScreen(
                         fullName = fullName, onFullNameChange = { fullName = it },
                         cedula = cedula, onCedulaChange = { cedula = it },
                         birthDate = birthDate, onBirthDateChange = { birthDate = it },
+                        onNext = {
+                            step = if (selectedRole == UserRole.DRIVER) RegStep.PAGO_MOVIL
+                                   else RegStep.EMAIL_INPUT
+                        }
+                    )
+                    RegStep.PAGO_MOVIL -> StepPagoMovil(
+                        pmCedula = pmCedula,    onPmCedulaChange = { pmCedula = it },
+                        pmTelefono = pmTelefono, onPmTelefonoChange = { pmTelefono = it },
+                        pmBanco = pmBanco,       onPmBancoChange = { pmBanco = it },
                         onNext = { step = RegStep.EMAIL_INPUT }
                     )
                     RegStep.EMAIL_INPUT -> StepEmailInput(
@@ -186,7 +202,10 @@ fun RegisterScreen(
                                 email = email,
                                 selfieUrl = selfieUri?.toString(),
                                 idDocUrl = idDocUri?.toString(),
-                                role = selectedRole
+                                role = selectedRole,
+                                pagoMovilCedula   = pmCedula.takeIf { it.isNotEmpty() },
+                                pagoMovilTelefono = pmTelefono.takeIf { it.isNotEmpty() },
+                                pagoMovilBanco    = pmBanco.takeIf { it.isNotEmpty() }
                             )
                         }
                     )
@@ -218,9 +237,11 @@ fun RegisterScreen(
 
 // ─── Header con barra de progreso ────────────────────────────────────────────
 @Composable
-private fun RegHeader(step: RegStep, onBack: () -> Unit) {
-    val totalSteps = RegStep.values().size
-    val currentIndex = step.ordinal + 1
+private fun RegHeader(step: RegStep, role: UserRole, onBack: () -> Unit) {
+    // Para clientes el paso PAGO_MOVIL no existe → se omite del conteo
+    val visibleSteps = RegStep.values().filter { it != RegStep.PAGO_MOVIL || role == UserRole.DRIVER }
+    val totalSteps = visibleSteps.size
+    val currentIndex = (visibleSteps.indexOf(step) + 1).coerceAtLeast(1)
     val progress = currentIndex.toFloat() / totalSteps
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -273,6 +294,7 @@ private fun stepTitle(step: RegStep) = when (step) {
     RegStep.PHONE_INPUT   -> "Tu teléfono"
     RegStep.PHONE_OTP     -> "Verificación"
     RegStep.PERSONAL_DATA -> "Tus datos"
+    RegStep.PAGO_MOVIL    -> "Pago Móvil"
     RegStep.EMAIL_INPUT   -> "Tu correo"
     RegStep.EMAIL_OTP     -> "Verificación"
     RegStep.PHOTO_KYC     -> "Verificación KYC"
@@ -443,7 +465,186 @@ private fun StepPersonalData(
     }
 }
 
-// ─── Paso 4: Ingreso de email ─────────────────────────────────────────────────
+// ─── Paso 4 (conductor): Pago Móvil ──────────────────────────────────────────
+private val BANCOS_VENEZUELA = listOf(
+    "Banco de Venezuela",
+    "Banesco",
+    "Banco Mercantil",
+    "BBVA Provincial",
+    "Banco Bicentenario",
+    "Banco del Tesoro",
+    "Banco Nacional de Crédito (BNC)",
+    "Banplus",
+    "Bancamiga",
+    "Banco Exterior",
+    "Banco Activo",
+    "Banco Caroní",
+    "Banco Fondo Común (BFC)",
+    "Mi Banco",
+    "Banco Venezolano de Crédito",
+    "Banco Plaza",
+    "100% Banco",
+    "Delsur Banco Universal",
+    "Banco Agrícola de Venezuela",
+    "Instituto Municipal de Crédito Popular (IMCP)"
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StepPagoMovil(
+    pmCedula: String,    onPmCedulaChange: (String) -> Unit,
+    pmTelefono: String,  onPmTelefonoChange: (String) -> Unit,
+    pmBanco: String,     onPmBancoChange: (String) -> Unit,
+    onNext: () -> Unit
+) {
+    val focusManager = LocalFocusManager.current
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+
+        // Info banner
+        Card(
+            colors = CardDefaults.cardColors(containerColor = RegYellow.copy(alpha = 0.08f)),
+            shape = RoundedCornerShape(14.dp),
+            border = BorderStroke(1.dp, RegYellow.copy(alpha = 0.35f))
+        ) {
+            Row(
+                modifier = Modifier.padding(14.dp),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    Icons.Outlined.AccountBalance,
+                    contentDescription = null,
+                    tint = RegYellow,
+                    modifier = Modifier.size(22.dp)
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Datos de Pago Móvil",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = RegYellow
+                    )
+                    Text(
+                        text = "Esta información se mostrará al cliente para que pueda realizarte el pago por Pago Móvil.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = RegSubText,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+        }
+
+        // Cédula
+        RegTextField(
+            value = pmCedula,
+            onValueChange = onPmCedulaChange,
+            label = "Cédula de identidad",
+            icon = Icons.Outlined.Badge,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Next
+            ),
+            keyboardActions = KeyboardActions(onNext = {
+                focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)
+            })
+        )
+
+        // Teléfono de pago móvil
+        RegTextField(
+            value = pmTelefono,
+            onValueChange = onPmTelefonoChange,
+            label = "Teléfono de Pago Móvil",
+            icon = Icons.Outlined.PhoneAndroid,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Phone,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
+        )
+
+        // Selector de banco
+        ExposedDropdownMenuBox(
+            expanded = dropdownExpanded,
+            onExpandedChange = { dropdownExpanded = !dropdownExpanded }
+        ) {
+            OutlinedTextField(
+                value = pmBanco,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Banco", color = RegSubText, fontSize = 14.sp) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Outlined.AccountBalance,
+                        contentDescription = null,
+                        tint = RegSubText,
+                        modifier = Modifier.size(20.dp)
+                    )
+                },
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded)
+                },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = RegYellow,
+                    unfocusedBorderColor = RegCardLight,
+                    focusedLabelColor = RegYellow,
+                    cursorColor = RegYellow,
+                    focusedTextColor = RegText,
+                    unfocusedTextColor = RegText,
+                    focusedContainerColor = RegCardLight,
+                    unfocusedContainerColor = RegCardLight,
+                    focusedTrailingIconColor = RegYellow,
+                    unfocusedTrailingIconColor = RegSubText
+                )
+            )
+            ExposedDropdownMenu(
+                expanded = dropdownExpanded,
+                onDismissRequest = { dropdownExpanded = false },
+                modifier = Modifier.background(RegCard)
+            ) {
+                BANCOS_VENEZUELA.forEach { banco ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = banco,
+                                color = if (banco == pmBanco) RegYellow else RegText,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        },
+                        onClick = {
+                            onPmBancoChange(banco)
+                            dropdownExpanded = false
+                        },
+                        leadingIcon = if (banco == pmBanco) {
+                            { Icon(Icons.Filled.CheckCircle, null, tint = RegYellow, modifier = Modifier.size(16.dp)) }
+                        } else null,
+                        colors = MenuDefaults.itemColors(
+                            textColor = RegText
+                        ),
+                        modifier = Modifier.background(
+                            if (banco == pmBanco) RegYellow.copy(alpha = 0.08f) else Color.Transparent
+                        )
+                    )
+                }
+            }
+        }
+
+        RegButton(
+            text = "Continuar",
+            isLoading = false,
+            enabled = pmCedula.trim().length >= 6 && pmTelefono.trim().length >= 7 && pmBanco.isNotEmpty(),
+            onClick = onNext
+        )
+    }
+}
+
+// ─── Paso 5: Ingreso de email ─────────────────────────────────────────────────
 @Composable
 private fun StepEmailInput(
     email: String,

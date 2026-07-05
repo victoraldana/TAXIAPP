@@ -205,7 +205,10 @@ class AuthViewModel : ViewModel() {
         email: String,
         selfieUrl: String? = null,
         idDocUrl: String? = null,
-        role: UserRole = UserRole.CLIENT
+        role: UserRole = UserRole.CLIENT,
+        pagoMovilCedula: String? = null,
+        pagoMovilTelefono: String? = null,
+        pagoMovilBanco: String? = null
     ) {
         _authState.value = AuthModels.AuthResult.Loading
         viewModelScope.launch {
@@ -220,7 +223,10 @@ class AuthViewModel : ViewModel() {
                         birthDate = birthDate.trim().takeIf { it.isNotEmpty() },
                         selfieUrl = selfieUrl,
                         idDocUrl = idDocUrl,
-                        role = if (role == UserRole.CLIENT) "client" else "driver"
+                        role = if (role == UserRole.CLIENT) "client" else "driver",
+                        pagoMovilCedula = pagoMovilCedula?.trim()?.takeIf { it.isNotEmpty() },
+                        pagoMovilTelefono = pagoMovilTelefono?.trim()?.takeIf { it.isNotEmpty() },
+                        pagoMovilBanco = pagoMovilBanco?.trim()?.takeIf { it.isNotEmpty() }
                     )
                 )
                 if (response.isSuccessful) {

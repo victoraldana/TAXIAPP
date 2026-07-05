@@ -47,13 +47,17 @@ object AuthModels {
     data class RegisterRequest(
         val phone: String,
         val password: String? = null,
-        @SerializedName("full_name")  val fullName: String? = null,
+        @SerializedName("full_name")           val fullName: String? = null,
         val email: String? = null,
         val cedula: String? = null,
-        @SerializedName("birth_date") val birthDate: String? = null,   // "YYYY-MM-DD"
-        @SerializedName("selfie_url") val selfieUrl: String? = null,
-        @SerializedName("id_doc_url") val idDocUrl: String? = null,
-        val role: String = "client"                                      // "client" | "driver"
+        @SerializedName("birth_date")          val birthDate: String? = null,   // "YYYY-MM-DD"
+        @SerializedName("selfie_url")          val selfieUrl: String? = null,
+        @SerializedName("id_doc_url")          val idDocUrl: String? = null,
+        val role: String = "client",                                             // "client" | "driver"
+        // Pago Móvil (solo conductores)
+        @SerializedName("pago_movil_cedula")   val pagoMovilCedula: String? = null,
+        @SerializedName("pago_movil_telefono") val pagoMovilTelefono: String? = null,
+        @SerializedName("pago_movil_banco")    val pagoMovilBanco: String? = null
     )
 
     data class RefreshTokenRequest(
@@ -79,15 +83,19 @@ object AuthModels {
     )
 
     data class DriverProfile(
-        @SerializedName("vehicle_make")  val vehicleMake: String?,
-        @SerializedName("vehicle_model") val vehicleModel: String?,
-        @SerializedName("vehicle_plate") val vehiclePlate: String?,
-        @SerializedName("vehicle_color") val vehicleColor: String?,
-        @SerializedName("vehicle_type")  val vehicleType: String?,
-        @SerializedName("is_available")  val isAvailable: Boolean?,
-        @SerializedName("is_approved")   val isApproved: Boolean?,
+        @SerializedName("vehicle_make")         val vehicleMake: String?,
+        @SerializedName("vehicle_model")        val vehicleModel: String?,
+        @SerializedName("vehicle_plate")        val vehiclePlate: String?,
+        @SerializedName("vehicle_color")        val vehicleColor: String?,
+        @SerializedName("vehicle_type")         val vehicleType: String?,
+        @SerializedName("is_available")         val isAvailable: Boolean?,
+        @SerializedName("is_approved")          val isApproved: Boolean?,
         val rating: Double?,
-        @SerializedName("total_trips")   val totalTrips: Int?
+        @SerializedName("total_trips")          val totalTrips: Int?,
+        // Pago Móvil
+        @SerializedName("pago_movil_cedula")    val pagoMovilCedula: String?,
+        @SerializedName("pago_movil_telefono")  val pagoMovilTelefono: String?,
+        @SerializedName("pago_movil_banco")     val pagoMovilBanco: String?
     )
 
     data class ClientProfile(

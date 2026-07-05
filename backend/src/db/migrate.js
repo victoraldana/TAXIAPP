@@ -195,10 +195,13 @@ CREATE TRIGGER trg_trips_updated_at
     BEFORE UPDATE ON trips FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Agregar columnas nuevas a tablas existentes (idempotente)
-ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS unit_number       VARCHAR(20);
-ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS current_lat       DOUBLE PRECISION;
-ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS current_lng       DOUBLE PRECISION;
-ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS vehicle_photo_url TEXT;
+ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS unit_number          VARCHAR(20);
+ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS current_lat          DOUBLE PRECISION;
+ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS current_lng          DOUBLE PRECISION;
+ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS vehicle_photo_url    TEXT;
+ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS pago_movil_cedula    VARCHAR(20);
+ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS pago_movil_telefono  VARCHAR(20);
+ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS pago_movil_banco     VARCHAR(100);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_driver_unit ON driver_profiles(unit_number) WHERE unit_number IS NOT NULL;
 
 -- Calificación del cliente hacia el conductor

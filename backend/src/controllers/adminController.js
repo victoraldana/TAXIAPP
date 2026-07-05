@@ -719,7 +719,8 @@ export const getTripStatus = async (req, res) => {
   const { tripId } = req.params;
   try {
     const result = await query(
-      `SELECT t.id, t.status, t.driver_id, t.cancel_reason, t.cancel_request_status
+      `SELECT t.id, t.status, t.driver_id, t.cancel_reason, t.cancel_request_status,
+              (SELECT COUNT(*) FROM trip_messages tm WHERE tm.trip_id = t.id) AS total_messages
        FROM trips t
        WHERE t.id = $1`,
       [tripId]

@@ -389,6 +389,10 @@ async function checkSupportNotifications() {
             // Reproducir sonido para SOS si es posible
             const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
             audio.play().catch(e => console.log('Audio autoplay blocked', e));
+          } else {
+            // Reproducir sonido estándar para mensajes normales
+            const audio = new Audio('https://actions.google.com/sounds/v1/water/glass_water_pour.ogg');
+            audio.play().catch(e => console.log('Audio autoplay blocked', e));
           }
         }
         lastNotifiedUnread[user_id] = count;
